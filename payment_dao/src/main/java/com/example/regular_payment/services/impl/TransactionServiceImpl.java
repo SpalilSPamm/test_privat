@@ -1,5 +1,6 @@
 package com.example.regular_payment.services.impl;
 
+import com.example.regular_payment.models.Instruction;
 import com.example.regular_payment.models.Transaction;
 import com.example.regular_payment.repositories.TransactionRepository;
 import com.example.regular_payment.services.InstructionService;
@@ -29,7 +30,13 @@ public class TransactionServiceImpl implements TransactionService {
     @Transactional
     public Transaction createTransaction(Transaction transaction) {
 
-        instructionService.updateLastAndNextRExecutionTime(transaction.getInstruction());
+        Instruction instruction = transaction.getInstruction();
+
+        instructionService.updateLastAndNextRExecutionTime(
+                instruction.getId(),
+                instruction.getLastExecutionAt(),
+                instruction.getNextExecutionAt()
+        );
 
         return transactionRepository.save(transaction);
     }

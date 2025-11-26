@@ -60,16 +60,17 @@ public class InstructionServiceImpl implements InstructionService {
 
     @Override
     @Transactional
-    public void updateLastAndNextRExecutionTime(Instruction instruction) {
+    public void updateLastAndNextRExecutionTime(Long id, OffsetDateTime lastExecutionAt, OffsetDateTime nextExecutionAt) {
 
-        Long instructionId = instruction != null ? instruction.getId() : null;
-
-        if (instructionId == null || !instructionRepository.existsById(instruction.getId())) {
-            throw new InstructionNotFoundException("Instruction with ID " + instructionId + " not found in PDS.");
+        if (id == null) {
+            throw new InstructionNotFoundException("Instruction ID cannot be null");
         }
 
-        instruction.setLastExecutionAt(OffsetDateTime.now(clock));
-        instruction.setNextExecutionAt(OffsetDateTime.now(clock).plus(instruction.getPeriodValue(), instruction.getPeriodUnit()));
+        Instruction instruction = instructionRepository.findById(id)
+                .orElseThrow(() -> new InstructionNotFoundException("Instruction with ID " + id + " not found"));
+
+        instruction.setLastExecutionAt(lastExecutionAt);
+        instruction.setNextExecutionAt(nextExecutionAt);
 
         instructionRepository.save(instruction);
     }
@@ -107,6 +108,6 @@ public class InstructionServiceImpl implements InstructionService {
     @Override
     @Transactional(readOnly = true)
     public List<Instruction> getAllActiveInstructions() {
-        return instructionRepository.getInstructionsByInstructionStatus(InstructionStatus.ACTIVE);
+        return instructionRepository.getInstructionsByInstructionStatusAndNextExecutionAtBefore(InstructionStatus.ACTIVE, OffsetDateTime.now(clock));
     }
 }
