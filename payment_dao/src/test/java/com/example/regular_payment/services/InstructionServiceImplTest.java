@@ -4,7 +4,6 @@ import com.example.regular_payment.models.Instruction;
 import com.example.regular_payment.repositories.InstructionRepository;
 import com.example.regular_payment.utils.enums.InstructionStatus;
 import com.example.regular_payment.utils.exceptions.InstructionNotFoundException;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -241,7 +240,7 @@ public class InstructionServiceImplTest {
         originalInstruction.setPeriodUnit(ChronoUnit.DAYS);
         originalInstruction.setPeriodValue(1);
         originalInstruction.setNextExecutionAt(fixedNow);
-        originalInstruction.setLastExecutionAt(null);
+        originalInstruction.setLastExecutionAt(fixedNow.minusDays(1));
         originalInstruction.setInstructionStatus(InstructionStatus.ACTIVE);
 
         Instruction savedOriginal = instructionRepository.save(originalInstruction);
@@ -252,7 +251,8 @@ public class InstructionServiceImplTest {
 
         OffsetDateTime expectedNextExecutionAt = fixedNow.plus(instructionToUpdate.getPeriodValue(), instructionToUpdate.getPeriodUnit());
 
-        instructionService.updateLastAndNextRExecutionTime(instructionToUpdate);
+        instructionService.updateLastAndNextRExecutionTime(instructionToUpdate.getId(),
+                fixedNow, expectedNextExecutionAt);
 
         Optional<Instruction> updatedInstructionOpt = instructionRepository.findById(savedInstructionId);
         assertTrue(updatedInstructionOpt.isPresent());
@@ -269,7 +269,7 @@ public class InstructionServiceImplTest {
         Instruction instruction = new Instruction();
 
         assertThrows(InstructionNotFoundException.class,
-                () -> instructionService.updateLastAndNextRExecutionTime(instruction));
+                () -> instructionService.updateLastAndNextRExecutionTime(instruction.getId(), null, null));
     }
 
     @Test
@@ -280,7 +280,7 @@ public class InstructionServiceImplTest {
         instruction.setId(nonExistentId);
 
         InstructionNotFoundException exception = assertThrows(InstructionNotFoundException.class,
-                () -> instructionService.updateLastAndNextRExecutionTime(instruction));
+                () -> instructionService.updateLastAndNextRExecutionTime(instruction.getId(), null, null));
 
         assertTrue(exception.getMessage().contains("Instruction with ID 999 not found"));
     }
@@ -410,9 +410,7 @@ public class InstructionServiceImplTest {
 
         assertEquals(2, activeInstructions.size());
 
-        activeInstructions.forEach(instruction -> {
-            assertEquals(InstructionStatus.ACTIVE, instruction.getInstructionStatus());
-        });
+        activeInstructions.forEach(instruction -> assertEquals(InstructionStatus.ACTIVE, instruction.getInstructionStatus()));
     }
 
     @Test
