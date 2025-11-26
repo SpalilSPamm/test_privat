@@ -1,0 +1,114 @@
+databaseChangeLog:
+  - changeSet:
+      id: create-instruction-table
+      author: KirillPivvovarov
+      preConditions:
+        - onFail: MARK_RAN
+          not:
+            - tableExists:
+                tableName: payment_instruction
+      changes:
+        - createTable:
+            tableName: payment_instruction
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                      primaryKey: true
+                      nullable: false
+              - column:
+                  name: payer_first_name
+                  type: VARCHAR(255)
+                  constraints:
+                      nullable: false
+              - column:
+                  name: payer_second_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payer_patronymic
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payer_iin
+                  type: VARCHAR(10)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payer_card_number
+                  type: VARCHAR(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recipient_settlement_account
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recipient_bank_code
+                  type: VARCHAR(6)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recipient_edrpou
+                  type: VARCHAR(8)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recipient_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: NUMERIC(19, 2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: period_value
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: period_unit
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: instruction_status
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_execution_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: true
+              - column:
+                  name: next_execution_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: create-index-on-next-execution-at-001
+      author: KirillPivvovarov
+      changes:
+        - createIndex:
+            indexName: idx_payment_instruction_next_exec
+            tableName: payment_instruction
+            columns:
+              - column:
+                  name: next_execution_at
+        - createIndex:
+            indexName: uix_payment_instruction_iin_edrpou
+            tableName: payment_instruction
+            unique: true
+            columns:
+              - column:
+                  name: payer_iin
+              - column:
+                  name: recipient_edrpou
