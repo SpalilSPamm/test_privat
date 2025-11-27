@@ -20,6 +20,9 @@ public class Instruction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    private Long version;
+
     @Column(name = "payer_first_name")
     private String payerFirstName;
 

@@ -111,3 +111,31 @@ databaseChangeLog:
                   name: payer_iin
               - column:
                   name: recipient_edrpou
+  - changeSet:
+      id: add-version-column-to-instruction
+      author: KirillPivvovarov
+      changes:
+        - addColumn:
+            tableName: payment_instruction
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: optimize-instruction-index-composite
+      author: KirillPivvovarov
+      changes:
+        - dropIndex:
+            indexName: idx_payment_instruction_next_exec
+            tableName: payment_instruction
+        - createIndex:
+            indexName: idx_payment_instruction_status_next_exec
+            tableName: payment_instruction
+            columns:
+              - column:
+                  name: instruction_status
+              - column:
+                  name: next_execution_at
