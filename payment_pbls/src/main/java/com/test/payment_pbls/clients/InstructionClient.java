@@ -17,8 +17,8 @@ import java.util.List;
 @Component
 public class InstructionClient {
 
-    RestTemplate restTemplate;
-    String serverUrl;
+    private final RestTemplate restTemplate;
+    private final String serverUrl;
 
     @Autowired
     public InstructionClient(RestTemplate restTemplate, @Value("${application.server.pds}") String url) {

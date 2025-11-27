@@ -65,9 +65,9 @@ public class InstructionController {
     }
 
     @GetMapping("/search/iin/{iin}")
-    public ResponseEntity<List<Instruction>> getInstructionsForIin(@PathVariable String iin) {
+    public ResponseEntity<List<InstructionDTO>> getInstructionsForIin(@PathVariable String iin) {
 
-        List<Instruction> result = instructionService.getInstructionsByIin(iin);
+        List<InstructionDTO> result = instructionService.getInstructionsByIin(iin).stream().map(instructionMapper::toDTO).toList();
 
         return ResponseEntity.status(HttpStatus.OK).body(result);
     }

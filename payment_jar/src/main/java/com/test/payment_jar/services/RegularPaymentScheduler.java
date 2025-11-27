@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class RegularPaymentScheduler {
 
-
     private final RegularPaymentService regularPaymentService;
 
     @Autowired

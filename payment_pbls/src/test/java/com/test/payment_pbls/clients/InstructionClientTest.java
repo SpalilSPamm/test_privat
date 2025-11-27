@@ -1,6 +1,8 @@
 package com.test.payment_pbls.clients;
 
 import com.test.payment_pbls.dtos.Instruction;
+import com.test.payment_pbls.dtos.InstructionCreateDTO;
+import com.test.payment_pbls.utils.enums.InstructionStatus;
 import com.test.payment_pbls.utils.exceptions.CreationFailureException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,9 +14,12 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigDecimal;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -30,71 +35,70 @@ public class InstructionClientTest {
     @InjectMocks
     private InstructionClient instructionClient;
 
-    private static final String MOCK_SERVER_URL = "http://locaдlhost";
+    private static final String MOCK_SERVER_URL = "http://localhost";
     private static final String TEST_IIN = "1234567899";
     private static final String TEST_EDRPOU = "40087654";
 
 
     @BeforeEach
     void setUp() {
-        instructionClient.serverUrl = MOCK_SERVER_URL;
+        instructionClient = new InstructionClient(restTemplate, MOCK_SERVER_URL);
     }
 
-//    @Test
-//    void createInstruction_shouldReturnInstructionOnSuccess() {
-//
-//        Instruction inputInstruction = new Instruction();
-//        inputInstruction.setPayerIin(TEST_IIN);
-//
-//        Instruction expectedInstruction = new Instruction();
-//        expectedInstruction.setId(10L);
-//        expectedInstruction.setPayerIin(TEST_IIN);
-//
-//        when(restTemplate.postForEntity(
-//                eq(MOCK_SERVER_URL + "/instructions"),
-//                eq(inputInstruction),
-//                eq(Instruction.class))
-//        ).thenReturn(new ResponseEntity<>(expectedInstruction, HttpStatus.CREATED));
-//
-//        Instruction result = instructionClient.createInstruction(inputInstruction);
-//
-//        assertNotNull(result);
-//        assertEquals(expectedInstruction.getId(), result.getId());
-//    }
+    @Test
+    void createInstruction_shouldReturnInstructionOnSuccess() {
 
-//    @Test
-//    void createInstruction_shouldThrowFailureExceptionOnRestClientError() {
-//
-//        Instruction inputInstruction = new Instruction();
-//
-//        when(restTemplate.postForEntity(
-//                eq(MOCK_SERVER_URL + "/instructions"),
-//                eq(inputInstruction),
-//                eq(Instruction.class))
-//        ).thenThrow(new HttpClientErrorException(HttpStatus.INTERNAL_SERVER_ERROR));
-//
-//        CreationFailureException exception = assertThrows(CreationFailureException.class,
-//                () -> instructionClient.createInstruction(inputInstruction));
-//
-//        assert(exception.getMessage().contains("Service communication error."));
-//    }
+        InstructionCreateDTO instructionCreateDTO = creatInstructionCreateDTO();
 
-//    @Test
-//    void createInstruction_shouldThrowFailureExceptionOnUnexpectedError() {
-//
-//        Instruction inputInstruction = new Instruction();
-//
-//        when(restTemplate.postForEntity(
-//                eq(MOCK_SERVER_URL + "/instructions"),
-//                eq(inputInstruction),
-//                eq(Instruction.class))
-//        ).thenThrow(new RuntimeException("Parsing failure"));
-//
-//        CreationFailureException exception = assertThrows(CreationFailureException.class,
-//                () -> instructionClient.createInstruction(inputInstruction));
-//
-//        assert(exception.getMessage().contains("An unexpected error occurred during instruction creation."));
-//    }
+        Instruction expectedInstruction = new Instruction();
+        expectedInstruction.setId(10L);
+        expectedInstruction.setPayerIin(TEST_IIN);
+
+        when(restTemplate.postForEntity(
+                eq(MOCK_SERVER_URL + "/instructions"),
+                eq(instructionCreateDTO),
+                eq(Instruction.class))
+        ).thenReturn(new ResponseEntity<>(expectedInstruction, HttpStatus.CREATED));
+
+        Instruction result = instructionClient.createInstruction(instructionCreateDTO);
+
+        assertNotNull(result);
+        assertEquals(expectedInstruction.getId(), result.getId());
+    }
+
+    @Test
+    void createInstruction_shouldThrowFailureExceptionOnRestClientError() {
+
+        InstructionCreateDTO instructionCreateDTO = creatInstructionCreateDTO();
+
+        when(restTemplate.postForEntity(
+                eq(MOCK_SERVER_URL + "/instructions"),
+                eq(instructionCreateDTO),
+                eq(Instruction.class))
+        ).thenThrow(new HttpClientErrorException(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        CreationFailureException exception = assertThrows(CreationFailureException.class,
+                () -> instructionClient.createInstruction(instructionCreateDTO));
+
+        assert(exception.getMessage().contains("Service communication error."));
+    }
+
+    @Test
+    void createInstruction_shouldThrowFailureExceptionOnUnexpectedError() {
+
+        InstructionCreateDTO instructionCreateDTO = creatInstructionCreateDTO();
+
+        when(restTemplate.postForEntity(
+                eq(MOCK_SERVER_URL + "/instructions"),
+                eq(instructionCreateDTO),
+                eq(Instruction.class))
+        ).thenThrow(new RuntimeException("Parsing failure"));
+
+        CreationFailureException exception = assertThrows(CreationFailureException.class,
+                () -> instructionClient.createInstruction(instructionCreateDTO));
+
+        assert(exception.getMessage().contains("An unexpected error occurred during instruction creation."));
+    }
 
     @Test
     void getInstructionsForIin_shouldReturnListOnSuccess() {
@@ -164,5 +168,14 @@ public class InstructionClientTest {
                 () -> instructionClient.getInstructionsForEdrpou(TEST_EDRPOU));
 
         assert(exception.getMessage().contains("An unexpected error occurred during instruction search."));
+    }
+
+    private InstructionCreateDTO creatInstructionCreateDTO() {
+        return new InstructionCreateDTO(
+                "Іван", "Іваненко", "Іванович",
+                "1234567890", "1111222233334444", "UA293123456789012345678901234",
+                "320649", "40087654", "ТОВ Отримувач", new BigDecimal("500.50"), 1,
+                ChronoUnit.HOURS, null, null, InstructionStatus.ACTIVE
+        );
     }
 }

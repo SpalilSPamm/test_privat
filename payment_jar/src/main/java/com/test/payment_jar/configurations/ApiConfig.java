@@ -6,17 +6,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.Clock;
 import java.time.Duration;
 
 @Configuration
 @EnableScheduling
 public class ApiConfig {
-    
-    @Bean
-    public Clock clock() {
-        return Clock.systemDefaultZone();
-    }
 
     @Bean
     public RestTemplate restTemplate() {
