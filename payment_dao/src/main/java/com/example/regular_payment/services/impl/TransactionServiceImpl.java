@@ -6,12 +6,18 @@ import com.example.regular_payment.repositories.TransactionRepository;
 import com.example.regular_payment.services.InstructionService;
 import com.example.regular_payment.services.TransactionService;
 import com.example.regular_payment.utils.enums.TransactionStatus;
+import com.example.regular_payment.utils.exceptions.InstructionNotFoundException;
 import com.example.regular_payment.utils.exceptions.TransactionNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class TransactionServiceImpl implements TransactionService {
@@ -39,6 +45,34 @@ public class TransactionServiceImpl implements TransactionService {
         );
 
         return transactionRepository.save(transaction);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    public List<Transaction> createTransactionsBatch(List<Transaction> transactions) {
+        if (transactions.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Instruction> instructionUpdates = transactions.stream()
+                .map(Transaction::getInstruction)
+                .toList();
+
+        Map<Long, Instruction> managedInstructionsMap =
+                instructionService.updateExecutionTimesBatch(instructionUpdates);
+
+        for (Transaction tx : transactions) {
+            Long instructionId = tx.getInstruction().getId();
+            Instruction managedInstruction = managedInstructionsMap.get(instructionId);
+
+            if (managedInstruction == null) {
+                throw new InstructionNotFoundException("Instruction ID " + instructionId + " missing after update");
+            }
+
+            tx.setInstruction(managedInstruction);
+        }
+
+        return transactionRepository.saveAll(transactions);
     }
 
     @Override

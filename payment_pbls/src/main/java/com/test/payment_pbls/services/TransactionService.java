@@ -9,6 +9,7 @@ import java.util.List;
 public interface TransactionService {
 
     TransactionDTO createTransaction(Instruction instruction);
+
     void revertTransaction(Long transactionId);
     List<TransactionDTO> getInstructionHistory(Long instructionId);
     BatchResultDTO processBatch(List<Instruction> instructions);

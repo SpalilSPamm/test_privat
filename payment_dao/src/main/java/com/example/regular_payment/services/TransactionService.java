@@ -8,6 +8,8 @@ public interface TransactionService {
 
     Transaction createTransaction(Transaction transaction);
 
+    List<Transaction> createTransactionsBatch(List<Transaction> transactions);
+
     Transaction updateTransaction(Long id, Transaction transaction);
 
     void deleteTransaction(Long id);
