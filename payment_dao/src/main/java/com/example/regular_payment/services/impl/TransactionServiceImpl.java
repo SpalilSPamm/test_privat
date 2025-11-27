@@ -32,7 +32,7 @@ public class TransactionServiceImpl implements TransactionService {
 
         Instruction instruction = transaction.getInstruction();
 
-        instructionService.updateLastAndNextRExecutionTime(
+        instructionService.updateLastAndNextExecutionTime(
                 instruction.getId(),
                 instruction.getLastExecutionAt(),
                 instruction.getNextExecutionAt()

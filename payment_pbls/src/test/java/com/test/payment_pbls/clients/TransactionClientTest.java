@@ -1,7 +1,8 @@
 package com.test.payment_pbls.clients;
 
-import com.test.payment_pbls.models.Instruction;
-import com.test.payment_pbls.models.Transaction;
+import com.test.payment_pbls.dtos.Instruction;
+import com.test.payment_pbls.dtos.Transaction;
+import com.test.payment_pbls.dtos.TransactionDTO;
 import com.test.payment_pbls.utils.enums.TransactionStatus;
 import com.test.payment_pbls.utils.exceptions.CreationFailureException;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +21,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,17 +52,18 @@ public class TransactionClientTest {
     void createTransaction_shouldReturnTransactionOnSuccess() {
 
         Transaction inputTransaction = createMockTransaction();
+        TransactionDTO transactionDTO = createMockTransactionDTO();
 
         when(restTemplate.postForEntity(
                 eq(MOCK_PDS_URL + "/transactions"),
                 eq(inputTransaction),
-                eq(Transaction.class))
-        ).thenReturn(new ResponseEntity<>(inputTransaction, HttpStatus.CREATED));
+                eq(TransactionDTO.class))
+        ).thenReturn(new ResponseEntity<>(transactionDTO, HttpStatus.CREATED));
 
-        Transaction result = transactionClient.createTransaction(inputTransaction);
+        TransactionDTO result = transactionClient.createTransaction(inputTransaction);
 
         assertNotNull(result);
-        assertEquals(TRANSACTION_ID, result.getId());
+        assertEquals(TRANSACTION_ID, result.id());
     }
 
     @Test
@@ -71,7 +74,7 @@ public class TransactionClientTest {
         when(restTemplate.postForEntity(
                 eq(MOCK_PDS_URL + "/transactions"),
                 eq(inputTransaction),
-                eq(Transaction.class))
+                eq(TransactionDTO.class))
         ).thenThrow(new HttpClientErrorException(HttpStatus.BAD_REQUEST));
 
         CreationFailureException exception = assertThrows(CreationFailureException.class,
@@ -110,8 +113,8 @@ public class TransactionClientTest {
     @Test
     void getTransactionsByInstructionId_shouldReturnListOnSuccess() {
 
-        List<Transaction> expectedList = List.of(createMockTransaction());
-        ResponseEntity<List<Transaction>> mockResponse = new ResponseEntity<>(expectedList, HttpStatus.OK);
+        List<TransactionDTO> expectedList = List.of(createMockTransactionDTO());
+        ResponseEntity<List<TransactionDTO>> mockResponse = new ResponseEntity<>(expectedList, HttpStatus.OK);
 
         when(restTemplate.exchange(
                 eq(MOCK_PDS_URL + "/transactions/instruction/" + INSTRUCTION_ID),
@@ -120,7 +123,7 @@ public class TransactionClientTest {
                 any(ParameterizedTypeReference.class)
         )).thenReturn(mockResponse);
 
-        List<Transaction> result = transactionClient.getTransactionsByInstructionId(INSTRUCTION_ID);
+        List<TransactionDTO> result = transactionClient.getTransactionsByInstructionId(INSTRUCTION_ID);
 
         assertFalse(result.isEmpty());
         assertEquals(1, result.size());
@@ -154,5 +157,16 @@ public class TransactionClientTest {
         transaction.setTransactionStatus(TransactionStatus.ACTIVE.getStatusCode());
         transaction.setIdempotencyId(UUID.randomUUID().toString());
         return transaction;
+    }
+
+    private TransactionDTO createMockTransactionDTO() {
+        return new TransactionDTO(
+                TRANSACTION_ID,
+                INSTRUCTION_ID,
+                UUID.randomUUID().toString(),
+                new BigDecimal("100.00"),
+                OffsetDateTime.now(),
+                TransactionStatus.ACTIVE.getStatusCode()
+        );
     }
 }

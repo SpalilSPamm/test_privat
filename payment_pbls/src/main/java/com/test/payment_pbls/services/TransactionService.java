@@ -1,13 +1,13 @@
 package com.test.payment_pbls.services;
 
-import com.test.payment_pbls.models.Instruction;
-import com.test.payment_pbls.models.Transaction;
+import com.test.payment_pbls.dtos.TransactionDTO;
+import com.test.payment_pbls.dtos.Instruction;
 
 import java.util.List;
 
 public interface TransactionService {
 
-    Transaction createTransaction(Instruction instruction);
+    TransactionDTO createTransaction(Instruction instruction);
     void revertTransaction(Long transactionId);
-    List<Transaction> getInstructionHistory(Long instructionId);
+    List<TransactionDTO> getInstructionHistory(Long instructionId);
 }

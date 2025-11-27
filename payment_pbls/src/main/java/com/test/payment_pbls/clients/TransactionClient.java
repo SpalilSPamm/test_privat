@@ -1,6 +1,7 @@
 package com.test.payment_pbls.clients;
 
-import com.test.payment_pbls.models.Transaction;
+import com.test.payment_pbls.dtos.TransactionDTO;
+import com.test.payment_pbls.dtos.Transaction;
 import com.test.payment_pbls.utils.exceptions.CreationFailureException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,11 +26,11 @@ public class TransactionClient {
         this.serverUrl = url;
     }
 
-    public Transaction createTransaction(Transaction transaction) {
+    public TransactionDTO createTransaction(Transaction transaction) {
 
         try {
 
-            return restTemplate.postForEntity(serverUrl + "/transactions", transaction, Transaction.class).getBody();
+            return restTemplate.postForEntity(serverUrl + "/transactions", transaction, TransactionDTO.class).getBody();
 
 //        } catch (DataIntegrityViolationException e) {
 //            // Це може статися, якщо PBLS не перехопив порушення UNIQUE INDEX
@@ -56,11 +57,11 @@ public class TransactionClient {
         }
     }
 
-    public List<Transaction> getTransactionsByInstructionId(Long instructionId) {
+    public List<TransactionDTO> getTransactionsByInstructionId(Long instructionId) {
 
         try {
 
-            ResponseEntity<List<Transaction>> response = restTemplate.exchange(
+            ResponseEntity<List<TransactionDTO>> response = restTemplate.exchange(
                     serverUrl + "/transactions/instruction/%s".formatted(instructionId),
                     HttpMethod.GET,
                     null,

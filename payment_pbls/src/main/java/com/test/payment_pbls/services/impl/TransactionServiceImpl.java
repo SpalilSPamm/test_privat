@@ -1,8 +1,9 @@
 package com.test.payment_pbls.services.impl;
 
 import com.test.payment_pbls.clients.TransactionClient;
-import com.test.payment_pbls.models.Instruction;
-import com.test.payment_pbls.models.Transaction;
+import com.test.payment_pbls.dtos.TransactionDTO;
+import com.test.payment_pbls.dtos.Instruction;
+import com.test.payment_pbls.dtos.Transaction;
 import com.test.payment_pbls.services.TransactionService;
 import com.test.payment_pbls.utils.enums.TransactionStatus;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +30,7 @@ public class TransactionServiceImpl implements TransactionService {
 
 
     @Override
-    public Transaction createTransaction(Instruction instruction) {
+    public TransactionDTO createTransaction(Instruction instruction) {
 
         log.info("PBLS: Update last and next execution date for instruction ID: {}", instruction.getId());
 
@@ -48,10 +49,10 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setTransactionTime(OffsetDateTime.now(clock));
         transaction.setAmount(instruction.getAmount());
 
-        Transaction savedTransaction = transactionClient.createTransaction(transaction);
+        TransactionDTO savedTransaction = transactionClient.createTransaction(transaction);
 
         log.info("PBLS: Transaction successfully saved in PDS (ID: {}, Key: {}).",
-                savedTransaction.getId(), savedTransaction.getIdempotencyId());
+                savedTransaction.id(), savedTransaction.idempotencyId());
 
         return savedTransaction;
     }
@@ -67,10 +68,10 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
-    public List<Transaction> getInstructionHistory(Long instructionId) {
+    public List<TransactionDTO> getInstructionHistory(Long instructionId) {
         log.debug("PBLS: Retrieving transaction history for instruction ID: {}", instructionId);
 
-        List<Transaction> history = transactionClient.getTransactionsByInstructionId(instructionId);
+        List<TransactionDTO> history = transactionClient.getTransactionsByInstructionId(instructionId);
 
         log.debug("PBLS: Retrieved {} transactions.", history.size());
 

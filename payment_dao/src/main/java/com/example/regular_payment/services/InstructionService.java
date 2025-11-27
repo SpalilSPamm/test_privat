@@ -1,5 +1,6 @@
 package com.example.regular_payment.services;
 
+import com.example.regular_payment.dtos.InstructionDTO;
 import com.example.regular_payment.models.Instruction;
 
 import java.time.OffsetDateTime;
@@ -9,9 +10,9 @@ public interface InstructionService {
 
     Instruction saveInstruction(Instruction instruction);
 
-    Instruction updateInstruction(Long id, Instruction instruction);
+    Instruction updateInstruction(Long id, InstructionDTO instructionDTO);
 
-    void updateLastAndNextRExecutionTime(Long id, OffsetDateTime lastExecutionAt, OffsetDateTime nextExecutionAt);
+    void updateLastAndNextExecutionTime(Long id, OffsetDateTime lastExecutionAt, OffsetDateTime nextExecutionAt);
 
     void deleteInstruction(Long id);
 

@@ -3,8 +3,8 @@ package com.test.payment_pbls.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.test.payment_pbls.dtos.InstructionDTO;
-import com.test.payment_pbls.models.Instruction;
+import com.test.payment_pbls.dtos.InstructionValidDTO;
+import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.services.InstructionService;
 import com.test.payment_pbls.utils.enums.InstructionStatus;
 import com.test.payment_pbls.utils.exceptions.CreationFailureException;
@@ -46,7 +46,7 @@ public class InstructionControllerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
-    private static final String VALID_IIN = "1111111111";
+    private static final String VALID_IIN = "1111111118";
     private static final String INVALID_IIN = "9999999999";
     private static final String VALID_EDRPOU = "40087654";
     private static final String INVALID_EDRPOU = "11111111";
@@ -54,46 +54,35 @@ public class InstructionControllerTest {
 
     @Test
     void shouldCreateInstructionAndReturn201() throws Exception {
-        // Arrange
-        InstructionDTO dto = createValidInstructionDTO();
+
+        InstructionValidDTO dto = createValidInstructionDTO();
         Instruction mockSavedInstruction = createMockInstruction();
 
-        // STUBBING: Сервіс повертає збережений об'єкт
-        when(instructionService.createInstruction(any(InstructionDTO.class)))
+        when(instructionService.createInstruction(any(InstructionValidDTO.class)))
                 .thenReturn(mockSavedInstruction);
 
         String dtoJson = objectMapper.writeValueAsString(dto);
 
-        // Act & Assert
         mockMvc.perform(post("/instructions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(dtoJson))
-
-                // 2. Перевірка статусу HTTP
                 .andExpect(status().isCreated())
-
-                // 3. Перевірка тіла відповіді (має бути об'єкт з ID)
                 .andExpect(jsonPath("$.id", is(GENERATED_ID.intValue())))
                 .andExpect(jsonPath("$.payerIin", is(VALID_IIN)));
     }
 
     @Test
     void shouldReturn400BadRequestWhenBusinessValidationFails() throws Exception {
-        // Arrange
-        InstructionDTO dto = createValidInstructionDTO();
 
-        // STUBBING: Сервіс викидає помилку бізнес-валідації (наприклад, невірна контрольна сума)
-        when(instructionService.createInstruction(any(InstructionDTO.class)))
+        InstructionValidDTO dto = createValidInstructionDTO();
+        when(instructionService.createInstruction(any(InstructionValidDTO.class)))
                 .thenThrow(new ValidationException("Invalid IIN checksum."));
 
         String dtoJson = objectMapper.writeValueAsString(dto);
 
-        // Act & Assert
         mockMvc.perform(post("/instructions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(dtoJson))
-
-                // Ми припускаємо, що ControllerAdvice мапить ValidationException на 400 Bad Request
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").exists());
     }
@@ -101,9 +90,9 @@ public class InstructionControllerTest {
     @Test
     void shouldReturn400BadRequestWhenClientReturnException() throws Exception {
 
-        InstructionDTO dto = createValidInstructionDTO();
+        InstructionValidDTO dto = createValidInstructionDTO();
 
-        when(instructionService.createInstruction(any(InstructionDTO.class)))
+        when(instructionService.createInstruction(any(InstructionValidDTO.class)))
                 .thenThrow(new CreationFailureException("Invalid IIN checksum."));
 
         String dtoJson = objectMapper.writeValueAsString(dto);
@@ -213,8 +202,8 @@ public class InstructionControllerTest {
                 .andExpect(jsonPath("$.message").exists());
     }
 
-    private InstructionDTO createValidInstructionDTO() {
-        return new InstructionDTO(
+    private InstructionValidDTO createValidInstructionDTO() {
+        return new InstructionValidDTO(
                 "Іван", "Іваненко", "Іванович",
                 VALID_IIN, "1111222233334444",
                 "UA293123456789012345678901234", "320649",
@@ -223,8 +212,6 @@ public class InstructionControllerTest {
         );
     }
 
-
-   // getInstructionsByRecipientEdrpou
     private Instruction createMockInstruction() {
         Instruction instruction = new Instruction();
         instruction.setId(GENERATED_ID);

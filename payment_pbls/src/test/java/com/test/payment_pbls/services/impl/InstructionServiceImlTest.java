@@ -1,10 +1,10 @@
 package com.test.payment_pbls.services.impl;
 
 import com.test.payment_pbls.clients.InstructionClient;
-import com.test.payment_pbls.dtos.InstructionDTO;
-import com.test.payment_pbls.models.Instruction;
+import com.test.payment_pbls.dtos.Instruction;
+import com.test.payment_pbls.dtos.InstructionCreateDTO;
+import com.test.payment_pbls.dtos.InstructionValidDTO;
 import com.test.payment_pbls.services.ValidationService;
-import com.test.payment_pbls.utils.enums.InstructionStatus;
 import com.test.payment_pbls.utils.exceptions.CreationFailureException;
 import jakarta.validation.ValidationException;
 import org.junit.jupiter.api.Test;
@@ -16,7 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
@@ -48,49 +47,39 @@ public class InstructionServiceImlTest {
     private static final ZoneOffset TIME_ZONE = ZoneOffset.ofHours(2);
     private static final Long GENERATED_ID = 500L;
 
+
     @Test
     void shouldCreateInstructionSuccessfullyAndCallPdsClient() {
 
         when(clock.instant()).thenReturn(FIXED_INSTANT);
         when(clock.getZone()).thenReturn(TIME_ZONE);
 
-        InstructionDTO dto = createValidInstructionDTO();
+        InstructionValidDTO dto = createValidInstructionDTO();
+        Instruction mockReturnedEntity = createValidInstruction();
 
-        OffsetDateTime expectedNextExecutionAt = OffsetDateTime.ofInstant(FIXED_INSTANT, TIME_ZONE)
-                .plus(dto.periodValue(), dto.periodUnit());
-
-        when(instructionClient.createInstruction(any(Instruction.class))).thenAnswer(invocation -> {
-            Instruction arg = invocation.getArgument(0);
-            arg.setId(GENERATED_ID);
-            return arg;
-        });
+        when(instructionClient.createInstruction(any(InstructionCreateDTO.class))).thenReturn( mockReturnedEntity);
 
         Instruction result = instructionService.createInstruction(dto);
 
         verify(validationService, times(1)).validatePayerIinChecksum(dto.payerIin());
         verify(validationService, times(1)).validatePayerEdrpouChecksum(dto.recipientEdrpou());
 
-        assertNotNull(result);
-        assertEquals(GENERATED_ID, result.getId());
-        assertEquals(dto.payerIin(), result.getPayerIin());
-        assertEquals(InstructionStatus.ACTIVE, result.getInstructionStatus(), "Початковий статус має бути ACTIVE.");
+        verify(instructionClient, times(1)).createInstruction(any(InstructionCreateDTO.class));
 
-        assertEquals(expectedNextExecutionAt.toInstant(), result.getNextExecutionAt().toInstant(), "Час наступного виконання розраховано невірно.");
-
-        verify(instructionClient, times(1)).createInstruction(any(Instruction.class));
+        assertEquals(GENERATED_ID, result.getId(), "ID має бути згенерований PDS.");
     }
 
     @Test
     void shouldThrowExceptionAndNotCallPdsClientWhenIinChecksumIsInvalid() {
 
-        InstructionDTO dto = createValidInstructionDTO();
+        InstructionValidDTO dto = createValidInstructionDTO();
 
         doThrow(new ValidationException("Invalid IIN checksum."))
                 .when(validationService).validatePayerIinChecksum(dto.payerIin());
 
         assertThrows(ValidationException.class, () -> instructionService.createInstruction(dto));
 
-        verify(instructionClient, never()).createInstruction(any(Instruction.class));
+        verify(instructionClient, never()).createInstruction(any(InstructionCreateDTO.class));
 
         verify(validationService, never()).validatePayerEdrpouChecksum(any());
     }
@@ -98,14 +87,14 @@ public class InstructionServiceImlTest {
     @Test
     void shouldThrowExceptionAndNotCallPdsClientWhenEdrpouChecksumIsInvalid() {
 
-        InstructionDTO dto = createValidInstructionDTO();
+        InstructionValidDTO dto = createValidInstructionDTO();
 
         doThrow(new ValidationException("Invalid EDRPOU checksum."))
                 .when(validationService).validatePayerEdrpouChecksum(dto.recipientEdrpou());
 
         assertThrows(ValidationException.class, () -> instructionService.createInstruction(dto));
 
-        verify(instructionClient, never()).createInstruction(any(Instruction.class));
+        verify(instructionClient, never()).createInstruction(any(InstructionCreateDTO.class));
 
         verify(validationService, times(1)).validatePayerIinChecksum(dto.payerIin());
     }
@@ -116,17 +105,17 @@ public class InstructionServiceImlTest {
         when(clock.instant()).thenReturn(FIXED_INSTANT);
         when(clock.getZone()).thenReturn(TIME_ZONE);
 
-        InstructionDTO dto = createValidInstructionDTO();
+        InstructionValidDTO dto = createValidInstructionDTO();
 
         doThrow(new CreationFailureException("Client request failed."))
-                .when(instructionClient).createInstruction(any(Instruction.class));
+                .when(instructionClient).createInstruction(any(InstructionCreateDTO.class));
 
         assertThrows(CreationFailureException.class, () -> instructionService.createInstruction(dto));
 
         verify(validationService, times(1)).validatePayerIinChecksum(dto.payerIin());
         verify(validationService, times(1)).validatePayerEdrpouChecksum(dto.recipientEdrpou());
 
-        verify(instructionClient, times(1)).createInstruction(any(Instruction.class));
+        verify(instructionClient, times(1)).createInstruction(any(InstructionCreateDTO.class));
 
     }
 
@@ -234,14 +223,14 @@ public class InstructionServiceImlTest {
         verify(instructionClient, never()).getInstructionsForEdrpou(anyString());
     }
 
-    private InstructionDTO createValidInstructionDTO() {
-        return new InstructionDTO(
+    private InstructionValidDTO createValidInstructionDTO() {
+        return new InstructionValidDTO(
                 "Іван", "Іваненко", "Іванович",
-                "1234567890", // Припускаємо, що це валідний ІПН для моку
+                "1234567890",
                 "1111222233334444",
                 "UA293123456789012345678901234",
                 "320649",
-                "40087654", // Припускаємо, що це валідний ЄДРПОУ для моку
+                "40087654",
                 "ТОВ Отримувач",
                 new BigDecimal("100.00"),
                 1,
@@ -251,7 +240,7 @@ public class InstructionServiceImlTest {
 
     private Instruction createValidInstruction() {
         Instruction mockInstruction = new Instruction();
-        mockInstruction.setId(1L);
+        mockInstruction.setId(GENERATED_ID);
         mockInstruction.setPayerIin(VALID_IIN);
         mockInstruction.setRecipientEdrpou(VALID_EDRPOU);
 

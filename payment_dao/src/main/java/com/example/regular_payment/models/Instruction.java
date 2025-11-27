@@ -1,11 +1,9 @@
 package com.example.regular_payment.models;
 
 import com.example.regular_payment.utils.enums.InstructionStatus;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.UuidGenerator;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -68,7 +66,6 @@ public class Instruction {
     @Enumerated(EnumType.STRING)
     private InstructionStatus instructionStatus;
 
-    @JsonIgnore
     @OneToMany(mappedBy = "instruction", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Transaction> transactions;
 

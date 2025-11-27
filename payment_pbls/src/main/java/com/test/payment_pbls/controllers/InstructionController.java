@@ -1,7 +1,7 @@
 package com.test.payment_pbls.controllers;
 
-import com.test.payment_pbls.dtos.InstructionDTO;
-import com.test.payment_pbls.models.Instruction;
+import com.test.payment_pbls.dtos.InstructionValidDTO;
+import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.services.InstructionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -23,9 +23,9 @@ public class InstructionController {
 
 
     @PostMapping
-    public ResponseEntity<Instruction> createInstruction(@RequestBody InstructionDTO instructionDTO) {
+    public ResponseEntity<Instruction> createInstruction(@RequestBody InstructionValidDTO instructionValidDTO) {
 
-        Instruction savedInstruction = instructionService.createInstruction(instructionDTO);
+        Instruction savedInstruction = instructionService.createInstruction(instructionValidDTO);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(savedInstruction);
     }

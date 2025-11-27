@@ -1,8 +1,9 @@
 package com.test.payment_pbls.services.impl;
 
 import com.test.payment_pbls.clients.InstructionClient;
-import com.test.payment_pbls.dtos.InstructionDTO;
-import com.test.payment_pbls.models.Instruction;
+import com.test.payment_pbls.dtos.InstructionCreateDTO;
+import com.test.payment_pbls.dtos.InstructionValidDTO;
+import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.services.InstructionService;
 import com.test.payment_pbls.services.ValidationService;
 import com.test.payment_pbls.utils.enums.InstructionStatus;
@@ -17,9 +18,9 @@ import java.util.List;
 public class InstructionServiceImpl implements InstructionService {
 
 
-    private Clock clock;
-    private InstructionClient instructionClient;
-    private ValidationService validationService;
+    private final Clock clock;
+    private final InstructionClient instructionClient;
+    private final ValidationService validationService;
 
     @Autowired
     public InstructionServiceImpl(Clock clock, InstructionClient instructionClient, ValidationService validationService) {
@@ -29,36 +30,30 @@ public class InstructionServiceImpl implements InstructionService {
     }
 
     @Override
-    public Instruction createInstruction(InstructionDTO instructionDTO) {
+    public Instruction createInstruction(InstructionValidDTO instructionValidDTO) {
 
-        validationService.validatePayerIinChecksum(instructionDTO.payerIin());
-        validationService.validatePayerEdrpouChecksum(instructionDTO.recipientEdrpou());
+        validationService.validatePayerIinChecksum(instructionValidDTO.payerIin());
+        validationService.validatePayerEdrpouChecksum(instructionValidDTO.recipientEdrpou());
 
-        Instruction instruction = new Instruction();
-
-        instruction.setPayerFirstName(instructionDTO.payerFirstName());
-        instruction.setPayerSecondName(instructionDTO.payerSecondName());
-        instruction.setPayerPatronymic(instructionDTO.payerPatronymic());
-
-        instruction.setPayerIin(instructionDTO.payerIin());
-        instruction.setPayerCardNumber(instructionDTO.payerCardNumber());
-
-        instruction.setRecipientSettlementAccount(instructionDTO.recipientSettlementAccount());
-        instruction.setRecipientBankCode(instructionDTO.recipientBankCode());
-        instruction.setRecipientEdrpou(instructionDTO.recipientEdrpou());
-        instruction.setRecipientName(instructionDTO.recipientName());
-
-        instruction.setAmount(instructionDTO.amount());
-        instruction.setPeriodValue(instructionDTO.periodValue());
-        instruction.setPeriodUnit(instructionDTO.periodUnit());
-
-        instruction.setNextExecutionAt(
-                OffsetDateTime.now(clock).plus(instructionDTO.periodValue(), instructionDTO.periodUnit())
+        InstructionCreateDTO instructionCreateDTO = new InstructionCreateDTO(
+                instructionValidDTO.payerFirstName(),
+                instructionValidDTO.payerSecondName(),
+                instructionValidDTO.payerPatronymic(),
+                instructionValidDTO.payerIin(),
+                instructionValidDTO.payerCardNumber(),
+                instructionValidDTO.recipientSettlementAccount(),
+                instructionValidDTO.recipientBankCode(),
+                instructionValidDTO.recipientEdrpou(),
+                instructionValidDTO.recipientName(),
+                instructionValidDTO.amount(),
+                instructionValidDTO.periodValue(),
+                instructionValidDTO.periodUnit(),
+                null,
+                OffsetDateTime.now(clock).plus(instructionValidDTO.periodValue(), instructionValidDTO.periodUnit()),
+                InstructionStatus.ACTIVE
         );
 
-        instruction.setInstructionStatus(InstructionStatus.ACTIVE);
-
-        return instructionClient.createInstruction(instruction);
+        return instructionClient.createInstruction(instructionCreateDTO);
     }
 
     @Override

@@ -1,11 +1,13 @@
 package com.example.regular_payment.services.impl;
 
+import com.example.regular_payment.dtos.InstructionDTO;
 import com.example.regular_payment.models.Instruction;
 import com.example.regular_payment.repositories.InstructionRepository;
 import com.example.regular_payment.services.InstructionService;
 import com.example.regular_payment.utils.enums.InstructionStatus;
 import com.example.regular_payment.utils.exceptions.InstructionNotFoundException;
 
+import com.example.regular_payment.utils.mappers.InstructionMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,11 +20,15 @@ import java.util.List;
 public class InstructionServiceImpl implements InstructionService {
 
     private final Clock clock;
+    private final InstructionMapper instructionMapper;
     private final InstructionRepository instructionRepository;
 
     @Autowired
-    public InstructionServiceImpl(Clock clock, InstructionRepository instructionRepository) {
+    public InstructionServiceImpl(Clock clock,
+                                  InstructionMapper instructionMapper,
+                                  InstructionRepository instructionRepository) {
         this.clock = clock;
+        this.instructionMapper = instructionMapper;
         this.instructionRepository = instructionRepository;
     }
 
@@ -34,33 +40,17 @@ public class InstructionServiceImpl implements InstructionService {
 
     @Override
     @Transactional
-    public Instruction updateInstruction(Long id, Instruction instruction) {
+    public Instruction updateInstruction(Long id, InstructionDTO instructionDTO) {
         Instruction existingInstruction = getInstruction(id);
 
-        existingInstruction.setPayerFirstName(instruction.getPayerFirstName());
-        existingInstruction.setPayerSecondName(instruction.getPayerSecondName());
-        existingInstruction.setPayerPatronymic(instruction.getPayerPatronymic());
-        existingInstruction.setPayerIin(instruction.getPayerIin());
-        existingInstruction.setPayerCardNumber(instruction.getPayerCardNumber());
-
-        existingInstruction.setRecipientSettlementAccount(instruction.getRecipientSettlementAccount());
-        existingInstruction.setRecipientBankCode(instruction.getRecipientBankCode());
-        existingInstruction.setRecipientEdrpou(instruction.getRecipientEdrpou());
-        existingInstruction.setRecipientName(instruction.getRecipientName());
-
-        existingInstruction.setPeriodValue(instruction.getPeriodValue());
-        existingInstruction.setPeriodUnit(instruction.getPeriodUnit());
-        existingInstruction.setAmount(instruction.getAmount());
-
-        existingInstruction.setNextExecutionAt(instruction.getNextExecutionAt());
-        existingInstruction.setLastExecutionAt(instruction.getLastExecutionAt());
+        instructionMapper.updateEntityFromDto(instructionDTO, existingInstruction);
 
         return instructionRepository.save(existingInstruction);
     }
 
     @Override
     @Transactional
-    public void updateLastAndNextRExecutionTime(Long id, OffsetDateTime lastExecutionAt, OffsetDateTime nextExecutionAt) {
+    public void updateLastAndNextExecutionTime(Long id, OffsetDateTime lastExecutionAt, OffsetDateTime nextExecutionAt) {
 
         if (id == null) {
             throw new InstructionNotFoundException("Instruction ID cannot be null");
