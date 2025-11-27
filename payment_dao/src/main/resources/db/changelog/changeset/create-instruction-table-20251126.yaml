@@ -94,7 +94,7 @@ databaseChangeLog:
                   constraints:
                     nullable: false
   - changeSet:
-      id: create-index-on-next-execution-at-001
+      id: create-index-on-next-execution-at
       author: KirillPivvovarov
       changes:
         - createIndex:
@@ -106,7 +106,6 @@ databaseChangeLog:
         - createIndex:
             indexName: uix_payment_instruction_iin_edrpou
             tableName: payment_instruction
-            unique: true
             columns:
               - column:
                   name: payer_iin

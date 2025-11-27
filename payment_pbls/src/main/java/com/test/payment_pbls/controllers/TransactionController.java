@@ -1,7 +1,7 @@
 package com.test.payment_pbls.controllers;
 
-import com.test.payment_pbls.models.Instruction;
-import com.test.payment_pbls.models.Transaction;
+import com.test.payment_pbls.dtos.TransactionDTO;
+import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.services.TransactionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -22,9 +22,9 @@ public class TransactionController {
     }
 
     @PostMapping
-    public ResponseEntity<Transaction> createTransactionByInstruction(@RequestBody Instruction instruction) {
+    public ResponseEntity<TransactionDTO> createTransactionByInstruction(@RequestBody Instruction instruction) {
 
-        Transaction transaction = transactionService.createTransaction(instruction);
+        TransactionDTO transaction = transactionService.createTransaction(instruction);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(transaction);
     }
@@ -38,9 +38,9 @@ public class TransactionController {
     }
 
     @GetMapping("/{instructionId}/history")
-    public ResponseEntity<List<Transaction>>  getInstructionHistory(@PathVariable Long instructionId) {
+    public ResponseEntity<List<TransactionDTO>>  getInstructionHistory(@PathVariable Long instructionId) {
 
-        List<Transaction> result = transactionService.getInstructionHistory(instructionId);
+        List<TransactionDTO> result = transactionService.getInstructionHistory(instructionId);
 
         return ResponseEntity.status(HttpStatus.OK).body(result);
     }

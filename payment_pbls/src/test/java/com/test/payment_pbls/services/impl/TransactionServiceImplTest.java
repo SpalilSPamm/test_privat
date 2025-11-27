@@ -1,11 +1,12 @@
 package com.test.payment_pbls.services.impl;
 
 import com.test.payment_pbls.clients.TransactionClient;
-import com.test.payment_pbls.models.Instruction;
-import com.test.payment_pbls.models.Transaction;
+import com.test.payment_pbls.dtos.Instruction;
+import com.test.payment_pbls.dtos.Transaction;
+import com.test.payment_pbls.dtos.TransactionDTO;
+import com.test.payment_pbls.utils.enums.InstructionStatus;
 import com.test.payment_pbls.utils.enums.TransactionStatus;
 import com.test.payment_pbls.utils.exceptions.CreationFailureException;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,8 +18,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -42,16 +45,7 @@ public class TransactionServiceImplTest {
 
     private static final Long INSTRUCTION_ID = 10L;
     private static final Long TRANSACTION_ID = 50L;
-    private static final BigDecimal TEST_AMOUNT = new BigDecimal("50.00");
-    private Instruction mockInstruction;
-
-    @BeforeEach
-    void setUp() {
-
-        mockInstruction = new Instruction();
-        mockInstruction.setId(INSTRUCTION_ID);
-        mockInstruction.setAmount(TEST_AMOUNT);
-    }
+    private static final BigDecimal TEST_AMOUNT = new BigDecimal("100.00");
 
     @Test
     void createTransaction_shouldSetCriticalFieldsAndCallClient() {
@@ -59,27 +53,18 @@ public class TransactionServiceImplTest {
         when(clock.instant()).thenReturn(FIXED_INSTANT);
         when(clock.getZone()).thenReturn(TIME_ZONE);
 
-        OffsetDateTime expectedTime = OffsetDateTime.ofInstant(FIXED_INSTANT, TIME_ZONE);
+        when(transactionClient.createTransaction(any(Transaction.class))).thenReturn(createMockTransactionDTO());
 
-        when(transactionClient.createTransaction(any(Transaction.class)))
-                .thenAnswer(invocation -> {
-                    Transaction arg = invocation.getArgument(0);
-                    arg.setId(TRANSACTION_ID);
-                    return arg;
-                });
-
-        Transaction result = transactionService.createTransaction(mockInstruction);
+        TransactionDTO result = transactionService.createTransaction(createMockInstruction());
 
         verify(transactionClient, times(1)).createTransaction(any(Transaction.class));
 
         assertNotNull(result);
-        assertEquals(TRANSACTION_ID, result.getId());
-        assertEquals(INSTRUCTION_ID, result.getInstruction().getId());
-        assertEquals(TransactionStatus.ACTIVE.getStatusCode(), result.getTransactionStatus());
-        assertEquals(TEST_AMOUNT, result.getAmount());
-
-        assertNotNull(result.getIdempotencyId());
-        assertEquals(expectedTime, result.getTransactionTime());
+        assertNotNull(result.idempotencyId());
+        assertEquals(TRANSACTION_ID, result.id());
+        assertEquals(INSTRUCTION_ID, result.instructionId());
+        assertEquals(TransactionStatus.ACTIVE.getStatusCode(), result.transactionStatus());
+        assertEquals(TEST_AMOUNT, result.amount());
     }
 
     @Test
@@ -91,7 +76,7 @@ public class TransactionServiceImplTest {
         doThrow(new CreationFailureException("PDS error"))
                 .when(transactionClient).createTransaction(any(Transaction.class));
 
-        assertThrows(CreationFailureException.class, () -> transactionService.createTransaction(mockInstruction));
+        assertThrows(CreationFailureException.class, () -> transactionService.createTransaction(createMockInstruction()));
     }
 
     @Test
@@ -123,19 +108,16 @@ public class TransactionServiceImplTest {
 
         Long targetInstructionId = 100L;
 
-        Transaction transaction = new Transaction();
-        transaction.setInstruction(mockInstruction);
-
-        List<Transaction> expectedHistory = List.of(transaction);
+        List<TransactionDTO> expectedHistory = List.of(createMockTransactionDTO());
 
         when(transactionClient.getTransactionsByInstructionId(eq(targetInstructionId)))
                 .thenReturn(expectedHistory);
 
-        List<Transaction> result = transactionService.getInstructionHistory(targetInstructionId);
+        List<TransactionDTO> result = transactionService.getInstructionHistory(targetInstructionId);
 
         assertFalse(result.isEmpty());
         assertEquals(1, result.size());
-        assertEquals(INSTRUCTION_ID, result.getFirst().getInstruction().getId());
+        assertEquals(INSTRUCTION_ID, result.getFirst().instructionId());
 
         verify(transactionClient, times(1)).getTransactionsByInstructionId(eq(targetInstructionId));
     }
@@ -144,12 +126,12 @@ public class TransactionServiceImplTest {
     void getInstructionHistory_shouldReturnEmptyListIfNoHistory() {
 
         Long targetInstructionId = 100L;
-        List<Transaction> expectedHistory = Collections.emptyList();
+        List<TransactionDTO> expectedHistory = Collections.emptyList();
 
         when(transactionClient.getTransactionsByInstructionId(eq(targetInstructionId)))
                 .thenReturn(expectedHistory);
 
-        List<Transaction> result = transactionService.getInstructionHistory(targetInstructionId);
+        List<TransactionDTO> result = transactionService.getInstructionHistory(targetInstructionId);
 
         assertTrue(result.isEmpty());
         verify(transactionClient, times(1)).getTransactionsByInstructionId(eq(targetInstructionId));
@@ -165,5 +147,28 @@ public class TransactionServiceImplTest {
 
         assertThrows(CreationFailureException.class,
                 () -> transactionService.getInstructionHistory(transactionId));
+    }
+
+    private TransactionDTO createMockTransactionDTO() {
+        return new TransactionDTO(
+                TRANSACTION_ID,
+                INSTRUCTION_ID,
+                UUID.randomUUID().toString(),
+                TEST_AMOUNT,
+                OffsetDateTime.now(),
+                TransactionStatus.ACTIVE.getStatusCode()
+        );
+    }
+
+    private Instruction createMockInstruction() {
+        Instruction instruction = new Instruction();
+        instruction.setId(INSTRUCTION_ID);
+        instruction.setPayerIin("1111111118");
+        instruction.setRecipientEdrpou("40087654");
+        instruction.setInstructionStatus(InstructionStatus.ACTIVE);
+        instruction.setAmount(TEST_AMOUNT);
+        instruction.setPeriodUnit(ChronoUnit.HOURS);
+        instruction.setPeriodValue(1);
+        return instruction;
     }
 }

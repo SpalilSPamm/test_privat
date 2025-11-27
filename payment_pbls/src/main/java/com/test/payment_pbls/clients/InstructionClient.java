@@ -1,6 +1,7 @@
 package com.test.payment_pbls.clients;
 
-import com.test.payment_pbls.models.Instruction;
+import com.test.payment_pbls.dtos.InstructionCreateDTO;
+import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.utils.exceptions.CreationFailureException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,11 +26,11 @@ public class InstructionClient {
         this.serverUrl = url;
     }
 
-    public Instruction createInstruction(Instruction instruction) {
+    public Instruction createInstruction(InstructionCreateDTO instructionCreateDTO) {
 
         try {
 
-            return restTemplate.postForEntity(serverUrl + "/instructions", instruction, Instruction.class).getBody();
+            return restTemplate.postForEntity(serverUrl + "/instructions", instructionCreateDTO, Instruction.class).getBody();
 
 //        } catch (DataIntegrityViolationException e) {
 //            // Це може статися, якщо PBLS не перехопив порушення UNIQUE INDEX

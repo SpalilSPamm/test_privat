@@ -8,6 +8,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class ValidationServiceImpl implements ValidationService {
 
+    private static final int[] IIN_WEIGHTS =  {-1, 5, 7, 9, 4, 6, 10, 5, 7};
+    private static final int[] EDRPOU_BASE_WEIGHTS = {1, 2, 3, 4, 5, 6, 7};
+    private static final int[] EDRPOU_ALTERNATIVE_WEIGHTS = {7, 1, 2, 3, 4, 5, 6};
+
     @Override
     public void validatePayerIinChecksum(String iin) {
 
@@ -15,14 +19,12 @@ public class ValidationServiceImpl implements ValidationService {
             throw new ValidationException("IIN must be a 10-digit number.");
         }
 
-        int[] weights = {-1, 5, 7, 9, 4, 6, 10, 5, 7};
-
         int sum = 0;
         int checkDigit = Character.getNumericValue(iin.charAt(9));
 
         for (int i = 0; i < 9; i++) {
             int digit = Character.getNumericValue(iin.charAt(i));
-            sum += digit * weights[i];
+            sum += digit * IIN_WEIGHTS[i];
         }
 
         int calculatedChecksum = sum % 11;
@@ -43,18 +45,14 @@ public class ValidationServiceImpl implements ValidationService {
             throw new ValidationException("EDRPOU must be a 8-digit number.");
         }
 
-        int[] BASE_WEIGHTS = {1, 2, 3, 4, 5, 6, 7};
-
-        int[] ALTERNATIVE_WEIGHTS = {7, 1, 2, 3, 4, 5, 6};
-
         int checkDigit = Character.getNumericValue(edrpou.charAt(7));
 
         String digits = edrpou.substring(0, 7);
 
-        int calculatedChecksum = calculateEdrpouMod11(digits, BASE_WEIGHTS);
+        int calculatedChecksum = calculateEdrpouMod11(digits, EDRPOU_BASE_WEIGHTS);
 
         if (calculatedChecksum == 10) {
-            calculatedChecksum = calculateEdrpouMod11(digits, ALTERNATIVE_WEIGHTS);
+            calculatedChecksum = calculateEdrpouMod11(digits, EDRPOU_ALTERNATIVE_WEIGHTS);
         }
 
         if (calculatedChecksum != checkDigit) {

@@ -2,18 +2,16 @@ package com.test.payment_pbls.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.test.payment_pbls.models.Instruction;
-import com.test.payment_pbls.models.Transaction;
+import com.test.payment_pbls.dtos.Instruction;
+import com.test.payment_pbls.dtos.TransactionDTO;
 import com.test.payment_pbls.services.TransactionService;
 import com.test.payment_pbls.utils.enums.TransactionStatus;
 import com.test.payment_pbls.utils.exceptions.CreationFailureException;
 import com.test.payment_pbls.utils.exceptions.TransactionNotFoundException;
-import jakarta.validation.ValidationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -22,12 +20,12 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.hamcrest.Matchers.is;
-
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -53,7 +51,7 @@ public class TransactionControllerTest {
     void shouldCreateTransactionAndReturn201() throws Exception {
 
         Instruction inputInstruction = createMockInstruction();
-        Transaction mockSavedTransaction = createMockTransaction();
+        TransactionDTO mockSavedTransaction = createMockTransactionDTO();
 
         when(transactionService.createTransaction(any(Instruction.class)))
                 .thenReturn(mockSavedTransaction);
@@ -66,7 +64,7 @@ public class TransactionControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id", is(TRANSACTION_ID.intValue())))
                 .andExpect(jsonPath("$.amount", is(100.00)))
-                .andExpect(jsonPath("$.transactionStatus", is("A"))); // 'A' з TransactionStatus.ACTIVE
+                .andExpect(jsonPath("$.transactionStatus", is("A")));
     }
 
     @Test
@@ -114,7 +112,7 @@ public class TransactionControllerTest {
     @Test
     void shouldReturnTransactionHistoryAnd200() throws Exception {
 
-        List<Transaction> historyList = List.of(createMockTransaction(), createMockTransaction());
+        List<TransactionDTO> historyList = List.of(createMockTransactionDTO(), createMockTransactionDTO());
 
         when(transactionService.getInstructionHistory(eq(INSTRUCTION_ID)))
                 .thenReturn(historyList);
@@ -148,13 +146,14 @@ public class TransactionControllerTest {
         return instruction;
     }
 
-    private Transaction createMockTransaction() {
-        Transaction transaction = new Transaction();
-        transaction.setId(TRANSACTION_ID);
-        transaction.setInstruction(createMockInstruction());
-        transaction.setAmount(new BigDecimal("100.00"));
-        transaction.setTransactionStatus(TransactionStatus.ACTIVE.getStatusCode());
-        transaction.setTransactionTime(OffsetDateTime.now());
-        return transaction;
+    private TransactionDTO createMockTransactionDTO() {
+      return new TransactionDTO(
+              TRANSACTION_ID,
+              INSTRUCTION_ID,
+              UUID.randomUUID().toString(),
+              new BigDecimal("100.00"),
+              OffsetDateTime.now(),
+              TransactionStatus.ACTIVE.getStatusCode()
+      );
     }
 }

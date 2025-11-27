@@ -1,10 +1,13 @@
 package com.example.regular_payment.controllers;
 
+import com.example.regular_payment.dtos.TransactionCreateDTO;
+import com.example.regular_payment.dtos.TransactionDTO;
 import com.example.regular_payment.models.Instruction;
 import com.example.regular_payment.models.Transaction;
 import com.example.regular_payment.services.TransactionService;
 import com.example.regular_payment.utils.enums.TransactionStatus;
 import com.example.regular_payment.utils.exceptions.TransactionNotFoundException;
+import com.example.regular_payment.utils.mappers.TransactionMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
@@ -17,19 +20,18 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
-
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-
-import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -43,6 +45,9 @@ public class TransactionControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
+    private TransactionMapper transactionMapper;
+
+    @MockitoBean
     private TransactionService transactionService;
 
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -52,36 +57,76 @@ public class TransactionControllerTest {
     private static final Long NON_EXISTENT_ID = 999L;
     private static final String IDEMPOTENCY_KEY = UUID.randomUUID().toString();
 
+
+
+    private TransactionCreateDTO createValidTransactionCreateDTO() {
+
+        Instruction instruction = new Instruction();
+        instruction.setId(TEST_INSTRUCTION_ID);
+
+        return new TransactionCreateDTO(
+                instruction,
+                UUID.randomUUID().toString(),
+                new BigDecimal("50.00"),
+                OffsetDateTime.ofInstant(Instant.parse("2026-11-29T10:00:00Z"), ZoneOffset.ofHours(2)).truncatedTo(ChronoUnit.SECONDS),
+                "A"
+        );
+    }
+
+    private TransactionDTO createMockTransactionDTO() {
+        // Створює DTO, яка імітує об'єкт, що повертається клієнту
+        return new TransactionDTO(
+                TRANSACTION_ID,
+                TEST_INSTRUCTION_ID,
+                IDEMPOTENCY_KEY,
+                new BigDecimal("50.00"),
+                OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS),
+                "A"
+        );
+    }
+
     @Test
     void shouldCreateTransactionAndReturn201() throws Exception {
 
-        Transaction inputTransaction = createValidTransaction();
+        TransactionCreateDTO dto = createValidTransactionCreateDTO();
+        Transaction unsavedEntity = createValidTransaction();
+        Transaction savedEntity = createValidTransaction();
+        TransactionDTO responseDTO = createMockTransactionDTO();
 
-        Transaction expectedTransaction = createValidTransaction();
-        expectedTransaction.setId(TRANSACTION_ID);
+        when(transactionMapper.toEntity(any(TransactionCreateDTO.class)))
+                .thenReturn(unsavedEntity);
 
-        when(transactionService.createTransaction(any(Transaction.class)))
-                .thenReturn(expectedTransaction);
+        when(transactionService.createTransaction(eq(unsavedEntity)))
+                .thenReturn(savedEntity);
 
-        String transactionJson = objectMapper.writeValueAsString(inputTransaction);
+        when(transactionMapper.toDTO(eq(savedEntity)))
+                .thenReturn(responseDTO);
+
+        String dtoJson = objectMapper.writeValueAsString(dto);
 
         mockMvc.perform(post("/transactions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(transactionJson))
+                        .content(dtoJson))
+
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.id", is(TRANSACTION_ID.intValue())))
                 .andExpect(jsonPath("$.amount", is(50.00)))
+                .andExpect(jsonPath("$.instructionId", is(TEST_INSTRUCTION_ID.intValue()))) // Ключовий DTO-асерт
                 .andExpect(jsonPath("$.transactionStatus", is("A")));
+
+        verify(transactionMapper, times(1)).toDTO(eq(savedEntity));
     }
 
     @Test
     void shouldReturnBadRequestWhenMandatoryFieldIsMissing() throws Exception {
 
-        Transaction transaction = createValidTransaction();
-        transaction.setAmount(null);
+        TransactionCreateDTO dto = createValidTransactionCreateDTO();
+        Transaction unsavedEntity = createValidTransaction();
 
-        String instructionJson = objectMapper.writeValueAsString(transaction);
+        when(transactionMapper.toEntity(any(TransactionCreateDTO.class)))
+                .thenReturn(unsavedEntity);
+
+        String instructionJson = objectMapper.writeValueAsString(dto);
 
         when(transactionService.createTransaction(any(Transaction.class)))
                 .thenThrow(new DataIntegrityViolationException(""));
@@ -93,49 +138,64 @@ public class TransactionControllerTest {
     }
 
     @Test
-    void shouldReturnConflictWhenIdempotencyKeyIsDuplicate() throws Exception {
+    void shouldReturnBadRequestWhenIdempotencyKeyIsDuplicate() throws Exception {
 
-        Transaction inputTransaction = createValidTransaction();
-        String transactionJson = objectMapper.writeValueAsString(inputTransaction);
+        TransactionCreateDTO dto = createValidTransactionCreateDTO();
+
+        when(transactionMapper.toEntity(any(TransactionCreateDTO.class)))
+                .thenReturn(createValidTransaction());
 
         when(transactionService.createTransaction(any(Transaction.class)))
                 .thenThrow(new DataIntegrityViolationException("Duplicate Idempotency id detected."));
 
+        String dtoJson = objectMapper.writeValueAsString(dto);
+
         mockMvc.perform(post("/transactions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(transactionJson))
+                        .content(dtoJson))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", is("Duplicate Idempotency id detected.")));
     }
 
     @Test
     void shouldUpdateTransactionStatusAndReturn200() throws Exception {
-        Transaction inputTransaction = createValidTransaction();
-        inputTransaction.setId(TRANSACTION_ID);
-        inputTransaction.setTransactionStatus(TransactionStatus.REVERSED.getStatusCode());
 
-        Transaction expectedTransaction = createValidTransaction();
-        expectedTransaction.setId(TRANSACTION_ID);
-        expectedTransaction.setTransactionStatus(TransactionStatus.REVERSED.getStatusCode());
+        TransactionDTO inputDTO = createMockTransactionDTO();
+        Transaction unsavedEntity = createValidTransaction();
+        Transaction savedEntity = createValidTransaction();
+        savedEntity.setTransactionStatus(TransactionStatus.REVERSED.getStatusCode());
+        TransactionDTO responseDTO = createMockTransactionDTO();
+        responseDTO = new TransactionDTO(responseDTO.id(), responseDTO.instructionId(), responseDTO.idempotencyId(),
+                responseDTO.amount(), responseDTO.transactionTime(), TransactionStatus.REVERSED.getStatusCode());
 
-        when(transactionService.updateTransaction(eq(TRANSACTION_ID), any(Transaction.class)))
-                .thenReturn(expectedTransaction);
+        when(transactionMapper.toEntity(any(TransactionDTO.class)))
+                .thenReturn(unsavedEntity);
 
-        String transactionJson = objectMapper.writeValueAsString(inputTransaction);
+        when(transactionService.updateTransaction(eq(TRANSACTION_ID), eq(unsavedEntity)))
+                .thenReturn(savedEntity);
+
+        when(transactionMapper.toDTO(eq(savedEntity)))
+                .thenReturn(responseDTO);
+
+        String dtoJson = objectMapper.writeValueAsString(inputDTO);
 
         mockMvc.perform(put("/transactions/{id}", TRANSACTION_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(transactionJson))
+                        .content(dtoJson))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id", is(TRANSACTION_ID.intValue())))
-                .andExpect(jsonPath("$.transactionStatus", is("S")));
+                .andExpect(jsonPath("$.transactionStatus", is("S"))); // Перевіряємо REVERSED
     }
 
     @Test
     void shouldReturn404NotFoundWhenTransactionDoesNotExistWhenUpdating() throws Exception {
 
-        Transaction inputTransaction = createValidTransaction();
-        String transactionJson = objectMapper.writeValueAsString(inputTransaction);
+        TransactionDTO dto = createMockTransactionDTO();
+
+        when(transactionMapper.toEntity(any(TransactionDTO.class)))
+                .thenReturn(createValidTransaction());
+
+        String transactionJson = objectMapper.writeValueAsString(dto);
 
         when(transactionService.updateTransaction(eq(NON_EXISTENT_ID), any(Transaction.class)))
                 .thenThrow(new TransactionNotFoundException("Transaction with ID " + NON_EXISTENT_ID + " not found."));
@@ -150,18 +210,29 @@ public class TransactionControllerTest {
     @Test
     void shouldReturn400BadRequestWhenUpdatingWithInvalidData() throws Exception {
 
-        Transaction inputTransaction = createValidTransaction();
-        inputTransaction.setId(TRANSACTION_ID);
-        inputTransaction.setAmount(null);
-        String instructionJson = objectMapper.writeValueAsString(inputTransaction);
+        TransactionDTO validDTO = createMockTransactionDTO();
+        TransactionDTO invalidInputDTO = new TransactionDTO(
+                validDTO.id(), validDTO.instructionId(), validDTO.idempotencyId(),
+                null,
+                validDTO.transactionTime(), validDTO.transactionStatus()
+        );
 
-        when(transactionService.updateTransaction(eq(TRANSACTION_ID), any(Transaction.class)))
+        Transaction entityWithNullAmount = createValidTransaction();
+        entityWithNullAmount.setAmount(null);
+
+        when(transactionMapper.toEntity(any(TransactionDTO.class)))
+                .thenReturn(entityWithNullAmount);
+
+        when(transactionService.updateTransaction(eq(TRANSACTION_ID), eq(entityWithNullAmount)))
                 .thenThrow(new DataIntegrityViolationException(""));
+
+        String dtoJson = objectMapper.writeValueAsString(invalidInputDTO);
 
         mockMvc.perform(put("/transactions/{id}", TRANSACTION_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(instructionJson))
-                .andExpect(status().isBadRequest());
+                        .content(dtoJson))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").exists());
     }
 
     @Test
@@ -190,8 +261,12 @@ public class TransactionControllerTest {
 
         Transaction expectedTransaction = createValidTransaction();
         expectedTransaction.setId(TRANSACTION_ID);
+
+
         when(transactionService.getTransaction(eq(TRANSACTION_ID)))
                 .thenReturn(expectedTransaction);
+
+        when(transactionMapper.toDTO(eq(expectedTransaction))).thenReturn(createMockTransactionDTO());
 
         mockMvc.perform(get("/transactions/{id}", TRANSACTION_ID)
                         .contentType(MediaType.APPLICATION_JSON))
@@ -216,19 +291,23 @@ public class TransactionControllerTest {
     @Test
     void shouldReturnTransactionListAnd200WhenHistoryExists() throws Exception {
 
-        List<Transaction> expectedList = createTransactionList();
+        List<Transaction> expectedEntities = List.of(createValidTransaction(), createValidTransaction());
+
         when(transactionService.getTransactionsByInstruction(eq(TEST_INSTRUCTION_ID)))
-                .thenReturn(expectedList);
+                .thenReturn(expectedEntities);
+
+        when(transactionMapper.toDTO(any(Transaction.class)))
+                .thenReturn(createMockTransactionDTO());
 
         mockMvc.perform(get("/transactions/instruction/{instructionId}", TEST_INSTRUCTION_ID)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(3)))
-                .andExpect(jsonPath("$[0].id", is(200)))
-                .andExpect(jsonPath("$[0].transactionStatus", is("A")))
-                .andExpect(jsonPath("$[1].id", is(201)))
-                .andExpect(jsonPath("$[1].transactionStatus", is("S")));
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].id", is(TRANSACTION_ID.intValue())))
+                .andExpect(jsonPath("$[0].instructionId", is(TEST_INSTRUCTION_ID.intValue())));
+
+        verify(transactionMapper, times(2)).toDTO(any(Transaction.class));
     }
 
     @Test
@@ -258,23 +337,5 @@ public class TransactionControllerTest {
         transaction.setIdempotencyId(IDEMPOTENCY_KEY);
 
         return transaction;
-    }
-
-    private List<Transaction> createTransactionList() {
-
-        Instruction instruction = new Instruction();
-        instruction.setId(TEST_INSTRUCTION_ID);
-
-        List<Transaction> transactions = new ArrayList<>();
-        for (int i = 0; i < 3; i++) {
-            Transaction transaction = new Transaction();
-            transaction.setId(200L + i);
-            transaction.setInstruction(instruction);
-            transaction.setAmount(new BigDecimal("50.00"));
-            transaction.setTransactionStatus(i % 2 == 0 ? TransactionStatus.ACTIVE.getStatusCode() : TransactionStatus.REVERSED.getStatusCode());
-            transaction.setIdempotencyId(UUID.randomUUID().toString());
-            transactions.add(transaction);
-        }
-        return transactions;
     }
 }

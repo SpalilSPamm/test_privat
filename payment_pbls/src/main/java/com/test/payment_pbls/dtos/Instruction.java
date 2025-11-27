@@ -1,4 +1,4 @@
-package com.test.payment_pbls.models;
+package com.test.payment_pbls.dtos;
 
 import com.test.payment_pbls.utils.enums.InstructionStatus;
 import lombok.Data;

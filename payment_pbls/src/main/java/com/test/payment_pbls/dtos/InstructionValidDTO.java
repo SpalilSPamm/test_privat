@@ -5,7 +5,7 @@ import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
 
-public record InstructionDTO(
+public record InstructionValidDTO(
         @NotBlank(message = "Payer first name should not be empty")
         @Pattern(regexp = "^[A-ZА-ЩЬЮЯЄІЇҐЁЭЫЪ][a-zа-щьюяєіїґA-ZА-ЩЬЮЯЄІЇҐёэыъA-ZА-ЯЁЭЫЪ'ʼ’\\s-]+$",
         message = "Payer first name is not correct")

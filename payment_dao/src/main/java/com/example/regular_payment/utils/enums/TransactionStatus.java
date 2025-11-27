@@ -14,17 +14,4 @@ public enum TransactionStatus {
     TransactionStatus(String statusCode) {
         this.statusCode = statusCode;
     }
-
-    public String getStatusCode() {
-        return statusCode;
-    }
-
-    public static TransactionStatus fromCode(String code) {
-        for (TransactionStatus status : TransactionStatus.values()) {
-            if (status.statusCode.equalsIgnoreCase(code)) {
-                return status;
-            }
-        }
-        throw new IllegalArgumentException("Unknown transaction status code: " + code);
-    }
 }

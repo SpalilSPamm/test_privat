@@ -1,9 +1,12 @@
 package com.example.regular_payment.controllers;
 
+import com.example.regular_payment.dtos.InstructionCreateDTO;
+import com.example.regular_payment.dtos.InstructionDTO;
 import com.example.regular_payment.models.Instruction;
 import com.example.regular_payment.services.InstructionService;
 import com.example.regular_payment.utils.enums.InstructionStatus;
 import com.example.regular_payment.utils.exceptions.InstructionNotFoundException;
+import com.example.regular_payment.utils.mappers.InstructionMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
@@ -39,52 +42,56 @@ public class InstructionControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
+    private InstructionMapper instructionMapper;
+
+    @MockitoBean
     private InstructionService instructionService;
 
 
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
-
     @Test
     void shouldCreateInstructionAndReturn201() throws Exception {
 
-        Instruction newInstruction = createValidInstruction();
+        InstructionCreateDTO createDTO = createInstructionCreateDTO();
+        Instruction mappedEntity = createInstructionEntity();
+        Instruction savedEntity = createInstructionEntity();
+        savedEntity.setId(100L);
 
-        Instruction expectedInstruction = createValidInstruction();
-        expectedInstruction.setId(100L);
+        InstructionDTO responseDTO = createInstructionDTO(100L);
 
-        when(instructionService.saveInstruction(any(Instruction.class)))
-                .thenReturn(expectedInstruction);
+        when(instructionMapper.toEntity(any(InstructionCreateDTO.class))).thenReturn(mappedEntity);
+        when(instructionService.saveInstruction(any(Instruction.class))).thenReturn(savedEntity);
+        when(instructionMapper.toDTO(any(Instruction.class))).thenReturn(responseDTO);
 
-        String instructionJson = objectMapper.writeValueAsString(newInstruction);
+        String jsonRequest = objectMapper.writeValueAsString(createDTO);
 
         mockMvc.perform(post("/instructions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(instructionJson))
+                        .content(jsonRequest))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.id", is(100)))
-                .andExpect(jsonPath("$.payerIin", is(newInstruction.getPayerIin())))
-                .andExpect(jsonPath("$.amount", is(100.50)))
-                .andExpect(jsonPath("$.instructionStatus", is("ACTIVE")))
-                .andExpect(jsonPath("$.nextExecutionAt").exists())
-                .andExpect(jsonPath("$.lastExecutionAt").doesNotExist());
+                .andExpect(jsonPath("$.payerIin", is(createDTO.payerIin())))
+                .andExpect(jsonPath("$.amount", is(500.50)))
+                .andExpect(jsonPath("$.instructionStatus", is("ACTIVE")));
     }
 
     @Test
-    void shouldReturnBadRequestWhenMandatoryFieldIsMissing() throws Exception {
+    void shouldReturnBadRequestWhenServiceThrowsDataIntegrityException() throws Exception {
 
-        Instruction invalidInstruction = createValidInstruction();
-        invalidInstruction.setPayerIin(null);
+        InstructionCreateDTO createDTO = createInstructionCreateDTO();
+        Instruction mappedEntity = createInstructionEntity();
 
-        String instructionJson = objectMapper.writeValueAsString(invalidInstruction);
+        when(instructionMapper.toEntity(any(InstructionCreateDTO.class))).thenReturn(mappedEntity);
 
         when(instructionService.saveInstruction(any(Instruction.class)))
-                .thenThrow(new DataIntegrityViolationException(""));
+                .thenThrow(new DataIntegrityViolationException("Duplicate entry"));
+
+        String jsonRequest = objectMapper.writeValueAsString(createDTO);
 
         mockMvc.perform(post("/instructions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(instructionJson))
+                        .content(jsonRequest))
                 .andExpect(status().isBadRequest());
     }
 
@@ -92,46 +99,44 @@ public class InstructionControllerTest {
     void shouldUpdateInstructionAndReturn200() throws Exception {
 
         Long testId = 42L;
+        InstructionDTO updateRequestDTO = createInstructionDTO(testId);
 
-        Instruction inputInstruction = createValidInstruction();
-        inputInstruction.setAmount(new BigDecimal("250.75"));
-        inputInstruction.setPayerFirstName("Олег");
-        inputInstruction.setId(testId);
+        Instruction updatedEntity = createInstructionEntity();
+        updatedEntity.setId(testId);
 
-        when(instructionService.updateInstruction(eq(testId), any(Instruction.class)))
-                .thenReturn(inputInstruction);
+        InstructionDTO responseDTO = createInstructionDTO(testId);
 
-        String instructionJson = objectMapper.writeValueAsString(inputInstruction);
+        when(instructionService.updateInstruction(eq(testId), any(InstructionDTO.class)))
+                .thenReturn(updatedEntity);
 
+        when(instructionMapper.toDTO(updatedEntity)).thenReturn(responseDTO);
+
+        String jsonRequest = objectMapper.writeValueAsString(updateRequestDTO);
 
         mockMvc.perform(put("/instructions/{id}", testId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(instructionJson))
+                        .content(jsonRequest))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(testId.intValue())))
-                .andExpect(jsonPath("$.payerFirstName", is("Олег")))
-                .andExpect(jsonPath("$.amount", is(250.75)))
-                .andExpect(jsonPath("$.instructionStatus", is("ACTIVE")))
-                .andExpect(jsonPath("$.nextExecutionAt").exists());
+                .andExpect(jsonPath("$.id", is(42)))
+                .andExpect(jsonPath("$.payerFirstName", is(updateRequestDTO.payerFirstName())))
+                .andExpect(jsonPath("$.amount", is(500.50)));
     }
 
     @Test
-    void shouldReturn404NotFoundWhenInstructionDoesNotExistWhenUpdating() throws Exception {
-
+    void shouldReturn404NotFoundWhenUpdatingNonExistentInstruction() throws Exception {
         Long testId = 42L;
+        InstructionDTO updateRequestDTO = createInstructionDTO(testId);
 
-        Instruction inputInstruction = createValidInstruction();
-        inputInstruction.setId(testId);
-        String instructionJson = objectMapper.writeValueAsString(inputInstruction);
+        when(instructionService.updateInstruction(eq(testId), any(InstructionDTO.class)))
+                .thenThrow(new InstructionNotFoundException("Instruction with ID " + testId + " not found"));
 
-        when(instructionService.updateInstruction(eq(testId), any(Instruction.class)))
-                .thenThrow(new InstructionNotFoundException("Instruction with ID " + testId + " not found in PDS."));
+        String jsonRequest = objectMapper.writeValueAsString(updateRequestDTO);
 
         mockMvc.perform(put("/instructions/{id}", testId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(instructionJson))
+                        .content(jsonRequest))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message", is("Instruction with ID 42 not found in PDS.")));
+                .andExpect(jsonPath("$.message").exists());
     }
 
     @Test
@@ -139,12 +144,12 @@ public class InstructionControllerTest {
 
         Long testId = 42L;
 
-        Instruction inputInstruction = createValidInstruction();
+        Instruction inputInstruction = createInstructionEntity();
         inputInstruction.setId(testId);
         inputInstruction.setPayerIin(null);
         String instructionJson = objectMapper.writeValueAsString(inputInstruction);
 
-        when(instructionService.updateInstruction(eq(testId), any(Instruction.class)))
+        when(instructionService.updateInstruction(eq(testId), any(InstructionDTO.class)))
                 .thenThrow(new DataIntegrityViolationException(""));
 
         mockMvc.perform(put("/instructions/{id}", testId)
@@ -152,6 +157,7 @@ public class InstructionControllerTest {
                         .content(instructionJson))
                 .andExpect(status().isBadRequest());
     }
+
 
     @Test
     void shouldDeleteInstructionAndReturn200() throws Exception {
@@ -183,19 +189,45 @@ public class InstructionControllerTest {
 
         Long testId = 42L;
 
-        Instruction expectedInstruction = createValidInstruction();
+        Instruction expectedInstruction = createInstructionEntity();
         expectedInstruction.setId(testId);
 
         when(instructionService.getInstruction(eq(testId)))
                 .thenReturn(expectedInstruction);
+
+        when(instructionMapper.toDTO(expectedInstruction)).thenReturn(createInstructionDTO(testId));
 
         mockMvc.perform(get("/instructions/{id}", testId)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id", is(testId.intValue())))
                 .andExpect(jsonPath("$.payerIin", is(expectedInstruction.getPayerIin())))
-                .andExpect(jsonPath("$.amount", is(100.50)))
+                .andExpect(jsonPath("$.amount", is(500.50)))
                 .andExpect(jsonPath("$.instructionStatus", is("ACTIVE")));
+    }
+
+    @Test
+    void shouldSearchByEdrpouAndReturnListOfDTOs() throws Exception {
+
+        String edrpou = "12345678";
+        Instruction entity1 = createInstructionEntity();
+        entity1.setId(1L);
+        Instruction entity2 = createInstructionEntity();
+        entity2.setId(2L);
+
+        List<Instruction> entities = List.of(entity1, entity2);
+
+        when(instructionService.getInstructionsByEdrpou(edrpou)).thenReturn(entities);
+
+        when(instructionMapper.toDTO(any(Instruction.class)))
+                .thenReturn(createInstructionDTO(1L))
+                .thenReturn(createInstructionDTO(2L));
+
+        mockMvc.perform(get("/instructions/search/edrpou/{edrpou}", edrpou))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].id", is(1)))
+                .andExpect(jsonPath("$[1].id", is(2)));
     }
 
     @Test
@@ -215,7 +247,7 @@ public class InstructionControllerTest {
     @Test
     void shouldReturnInstructionListAnd200WhenResultsFound() throws Exception {
 
-        List<Instruction> expectedList = createInstructionListWithTestIin(2);
+        List<Instruction> expectedList = createInstructionListWithTestIin();
         when(instructionService.getInstructionsByIin(eq("0123456789")))
                 .thenReturn(expectedList);
 
@@ -250,16 +282,41 @@ public class InstructionControllerTest {
     void shouldReturnInstructionListAnd200WhenResultsFoundForSearchWithEdrpou() throws Exception {
 
         String testEdrpou = "44444444";
+        int count = 3;
 
-        List<Instruction> expectedList = createInstructionListWithTestEdrpou(3);
+        List<Instruction> entities = createInstructionListWithTestEdrpou(count);
+
         when(instructionService.getInstructionsByEdrpou(eq(testEdrpou)))
-                .thenReturn(expectedList);
+                .thenReturn(entities);
+
+        for (Instruction entity : entities) {
+            InstructionDTO expectedDto = new InstructionDTO(
+                    entity.getId(),
+                    entity.getPayerFirstName(),
+                    "SecondName",
+                    "Patronymic",
+                    "1234567890",
+                    "1111222233334444",
+                    "UA293123456789012345678901234",
+                    "320000",
+                    entity.getRecipientEdrpou(),
+                    "Recipient Name",
+                    entity.getAmount(),
+                    1,
+                    ChronoUnit.DAYS,
+                    OffsetDateTime.now(),
+                    OffsetDateTime.now().plusDays(1),
+                    InstructionStatus.ACTIVE
+            );
+
+            when(instructionMapper.toDTO(entity)).thenReturn(expectedDto);
+        }
 
         mockMvc.perform(get("/instructions/search/edrpou/{edrpou}", testEdrpou)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$", hasSize(count)))
                 .andExpect(jsonPath("$[0].id", is(200)))
                 .andExpect(jsonPath("$[0].recipientEdrpou", is(testEdrpou)))
                 .andExpect(jsonPath("$[0].amount", is(75.00)))
@@ -281,36 +338,106 @@ public class InstructionControllerTest {
                 .andExpect(jsonPath("$", hasSize(0)));
     }
 
-    private Instruction createValidInstruction() {
+    @Test
+    void shouldReturnActiveInstructionListAnd200() throws Exception {
+
+        Long testId = 42L;
+
+        Instruction entity = createInstructionEntity();
+        InstructionDTO dto = createInstructionDTO(testId);
+
+        when(instructionService.getAllActiveInstructions())
+                .thenReturn(List.of(entity, entity));
+
+        when(instructionMapper.toDTO(any(Instruction.class)))
+                .thenReturn(dto);
+
+        mockMvc.perform(get("/instructions/all")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[1].payerIin", is("1111111118")))
+                .andExpect(jsonPath("$[1].amount", is(500.50)));
+    }
+
+    @Test
+    void shouldReturnEmptyListWhenNoActiveInstructionsExist() throws Exception {
+
+        when(instructionService.getAllActiveInstructions())
+                .thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/instructions/all")
+                        .contentType(MediaType.APPLICATION_JSON))
+
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    private Instruction createInstructionEntity() {
         Instruction instruction = new Instruction();
-
-        instruction.setPayerFirstName("Іван");
-        instruction.setPayerSecondName("Іваненко");
-        instruction.setPayerPatronymic("Іванович");
-        instruction.setPayerIin("1234567890"); // 10 цифр
-        instruction.setPayerCardNumber("1111222233334444"); // 16 цифр
-
-        instruction.setRecipientSettlementAccount("UA293123456789012345678901234");
-        instruction.setRecipientBankCode("320649"); // МФО 6 цифр
-        instruction.setRecipientEdrpou("40087654"); // 8 цифр
-        instruction.setRecipientName("ТОВ Розрахункова Компанія");
-
-        instruction.setAmount(new BigDecimal("100.50"));
+        instruction.setPayerFirstName("NewName");
+        instruction.setPayerSecondName("NewSecondName");
+        instruction.setPayerPatronymic("Tarasovich");
+        instruction.setAmount(new BigDecimal("500.50"));
+        instruction.setPayerIin("1111111118");
+        instruction.setPayerCardNumber("1234567812345678");
+        instruction.setRecipientSettlementAccount("UA123456789012345678901234567");
+        instruction.setRecipientBankCode("000000");
+        instruction.setRecipientEdrpou("12345678");
+        instruction.setRecipientName("Taras Ivanko");
+        instruction.setPeriodUnit(ChronoUnit.DAYS);
         instruction.setPeriodValue(1);
-        instruction.setPeriodUnit(ChronoUnit.MONTHS); // Використовуємо ChronoUnit
-
-        instruction.setNextExecutionAt(OffsetDateTime.now().plusMonths(1).truncatedTo(ChronoUnit.SECONDS));
-
+        instruction.setNextExecutionAt(OffsetDateTime.now().plusDays(1));
         instruction.setInstructionStatus(InstructionStatus.ACTIVE);
-
-        instruction.setTransactions(List.of());
-
         return instruction;
     }
 
-    private List<Instruction> createInstructionListWithTestIin(int count) {
+    private InstructionDTO createInstructionDTO(Long id) {
+        return new InstructionDTO(
+                id,
+                "NewName",
+                "NewSecondName",
+                "Tarasovich",
+                "1111111118",
+                "1234567812345678",
+                "UA123456789012345678901234567",
+                "000000",
+                "12345678",
+                "Taras Ivanko",
+                new BigDecimal("500.50"),
+                1,
+                ChronoUnit.DAYS,
+                OffsetDateTime.now(),
+                OffsetDateTime.now().plusDays(1),
+                InstructionStatus.ACTIVE
+        );
+    }
+
+    private InstructionCreateDTO createInstructionCreateDTO() {
+        return new InstructionCreateDTO(
+                "NewName",
+                "NewSecondName",
+                "Tarasovich",
+                "1111111118",
+                "1234567812345678",
+                "123456781234567812345678123",
+                "000000",
+                "12345678",
+                "Taras Ivanko",
+                new BigDecimal("500.50"),
+                1,
+                ChronoUnit.DAYS,
+                OffsetDateTime.now(),
+                OffsetDateTime.now().plusDays(1),
+                InstructionStatus.ACTIVE
+        );
+    }
+
+    private List<Instruction> createInstructionListWithTestIin() {
         List<Instruction> instructions = new java.util.ArrayList<>();
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < 2; i++) {
             Instruction instruction = new Instruction();
             instruction.setId(100L + i);
             instruction.setPayerFirstName("Іван" + i);

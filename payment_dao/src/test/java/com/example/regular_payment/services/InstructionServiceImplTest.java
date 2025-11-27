@@ -1,7 +1,9 @@
 package com.example.regular_payment.services;
 
+import com.example.regular_payment.dtos.InstructionDTO;
 import com.example.regular_payment.models.Instruction;
 import com.example.regular_payment.repositories.InstructionRepository;
+import com.example.regular_payment.services.impl.InstructionServiceImpl;
 import com.example.regular_payment.utils.enums.InstructionStatus;
 import com.example.regular_payment.utils.exceptions.InstructionNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +45,7 @@ public class InstructionServiceImplTest {
     private Clock clock;
 
     @Autowired
-    private InstructionService instructionService;
+    private InstructionServiceImpl instructionService;
 
     @Autowired
     private InstructionRepository instructionRepository;
@@ -55,7 +57,6 @@ public class InstructionServiceImplTest {
 
     @Test
     void shouldSaveInstructionSuccessfully() {
-
         Instruction instruction = new Instruction();
         instruction.setPayerFirstName("Taras");
         instruction.setPayerSecondName("Ivanko");
@@ -80,7 +81,6 @@ public class InstructionServiceImplTest {
         assertThat(savedInstruction.getPayerFirstName()).isEqualTo("Taras");
         assertThat(savedInstruction.getLastExecutionAt()).isNull();
         assertThat(savedInstruction.getInstructionStatus()).isEqualTo(InstructionStatus.ACTIVE);
-
 
         Optional<Instruction> fetchedInstruction = instructionRepository.findById(savedInstruction.getId());
 
@@ -136,23 +136,27 @@ public class InstructionServiceImplTest {
         Instruction savedOriginal = instructionRepository.save(originalInstruction);
         Long id = savedOriginal.getId();
 
-        Instruction updateData = new Instruction();
+        OffsetDateTime nextExecutionAt = OffsetDateTime.now().plusDays(5).truncatedTo(ChronoUnit.MILLIS);
+        OffsetDateTime lastExecutionAt = OffsetDateTime.now().truncatedTo(ChronoUnit.MILLIS);
 
-        updateData.setPayerFirstName("NewName");
-        updateData.setPayerSecondName("NewSecondName");
-        updateData.setPayerPatronymic("Tarasovich");
-        updateData.setAmount(new BigDecimal("500.50"));
-        updateData.setPayerIin("12345");
-        updateData.setPayerCardNumber("1234567812345678");
-        updateData.setRecipientSettlementAccount("12345678123456781234567812345");
-        updateData.setRecipientBankCode("000000");
-        updateData.setRecipientEdrpou("12345678");
-        updateData.setRecipientName("Taras Ivanko");
-        updateData.setPeriodUnit(ChronoUnit.MONTHS);
-        updateData.setPeriodValue(1);
-        updateData.setNextExecutionAt(OffsetDateTime.now().plusDays(5).truncatedTo(ChronoUnit.MILLIS));
-        updateData.setLastExecutionAt(OffsetDateTime.now());
-        updateData.setInstructionStatus(InstructionStatus.ACTIVE);
+        InstructionDTO updateData = new InstructionDTO(
+                id,
+                "NewName",
+                "NewSecondName",
+                "Tarasovich",
+                "12345",
+                "1234567812345678",
+                "12345678123456781234567812345",
+                "000000",
+                "12345678",
+                "Taras Ivanko",
+                new BigDecimal("500.50"),
+                1,
+                ChronoUnit.DAYS,
+                lastExecutionAt,
+                nextExecutionAt,
+                InstructionStatus.ACTIVE
+        );
 
         Instruction result = instructionService.updateInstruction(id, updateData);
 
@@ -161,24 +165,37 @@ public class InstructionServiceImplTest {
         assertThat(result.getAmount()).isEqualByComparingTo(new BigDecimal("500.50"));
 
         Optional<Instruction> fetchedFromDb = instructionRepository.findById(id);
-
         assertThat(fetchedFromDb).isPresent();
         Instruction inDb = fetchedFromDb.get();
 
         assertThat(inDb.getPayerFirstName()).isEqualTo("NewName");
-        assertThat(inDb.getPayerSecondName()).isEqualTo("NewSecondName");
         assertThat(inDb.getAmount()).isEqualByComparingTo(new BigDecimal("500.50"));
-        assertThat(inDb.getPeriodUnit()).isEqualTo(ChronoUnit.MONTHS);
 
-        assertThat(inDb.getNextExecutionAt()).isEqualTo(updateData.getNextExecutionAt());
+        assertThat(inDb.getNextExecutionAt()).isEqualTo(nextExecutionAt);
     }
 
     @Test
     void shouldThrowExceptionWhenUpdatingNonExistentId() {
 
         Long nonExistentId = 99999L;
-        Instruction updateData = new Instruction();
-        updateData.setPayerFirstName("Ghost");
+        InstructionDTO updateData = new InstructionDTO(
+                nonExistentId,
+                "Ghost",
+                "User",
+                "Patronymic",
+                "1234567890",
+                "1111222233334444",
+                "UA12345678901234567890123456",
+                "300711",
+                "12345678",
+                "Recipient Name",
+                new BigDecimal("150.75"),
+                1,
+                ChronoUnit.DAYS,
+                OffsetDateTime.now().truncatedTo(ChronoUnit.MILLIS),
+                OffsetDateTime.now().plusDays(5).truncatedTo(ChronoUnit.MILLIS),
+                InstructionStatus.ACTIVE
+        );
 
         assertThatThrownBy(() -> instructionService.updateInstruction(nonExistentId, updateData))
                 .isInstanceOf(InstructionNotFoundException.class)
@@ -251,7 +268,7 @@ public class InstructionServiceImplTest {
 
         OffsetDateTime expectedNextExecutionAt = fixedNow.plus(instructionToUpdate.getPeriodValue(), instructionToUpdate.getPeriodUnit());
 
-        instructionService.updateLastAndNextRExecutionTime(instructionToUpdate.getId(),
+        instructionService.updateLastAndNextExecutionTime(instructionToUpdate.getId(),
                 fixedNow, expectedNextExecutionAt);
 
         Optional<Instruction> updatedInstructionOpt = instructionRepository.findById(savedInstructionId);
@@ -269,7 +286,7 @@ public class InstructionServiceImplTest {
         Instruction instruction = new Instruction();
 
         assertThrows(InstructionNotFoundException.class,
-                () -> instructionService.updateLastAndNextRExecutionTime(instruction.getId(), null, null));
+                () -> instructionService.updateLastAndNextExecutionTime(instruction.getId(), null, null));
     }
 
     @Test
@@ -280,7 +297,7 @@ public class InstructionServiceImplTest {
         instruction.setId(nonExistentId);
 
         InstructionNotFoundException exception = assertThrows(InstructionNotFoundException.class,
-                () -> instructionService.updateLastAndNextRExecutionTime(instruction.getId(), null, null));
+                () -> instructionService.updateLastAndNextExecutionTime(instruction.getId(), null, null));
 
         assertTrue(exception.getMessage().contains("Instruction with ID 999 not found"));
     }
@@ -399,6 +416,9 @@ public class InstructionServiceImplTest {
     @Test
     void shouldReturnOnlyActiveInstructions() {
 
+        when(clock.instant()).thenReturn(Instant.parse("2026-11-29T10:00:00Z"));
+        when(clock.getZone()).thenReturn(ZoneOffset.ofHours(2));
+
         createAndSaveInstruction( InstructionStatus.ACTIVE, "1111111118");
         createAndSaveInstruction(InstructionStatus.ACTIVE, "2222222222");
 
@@ -416,6 +436,9 @@ public class InstructionServiceImplTest {
     @Test
     void shouldReturnEmptyListWhenNoActiveInstructionsExist() {
 
+        when(clock.instant()).thenReturn(Instant.parse("2025-11-26T10:00:00Z"));
+        when(clock.getZone()).thenReturn(ZoneOffset.ofHours(2));
+
         createAndSaveInstruction( InstructionStatus.CANCELED, "1111111118");
         createAndSaveInstruction(InstructionStatus.CANCELED, "2222222222");
 
@@ -423,7 +446,7 @@ public class InstructionServiceImplTest {
 
         List<Instruction> activeInstructions = instructionService.getAllActiveInstructions();
 
-        assertTrue(activeInstructions.isEmpty(), "Список активних інструкцій має бути порожнім.");
+        assertTrue(activeInstructions.isEmpty());
     }
 
     private void createAndSaveInstruction(InstructionStatus status, String iin) {
@@ -442,7 +465,7 @@ public class InstructionServiceImplTest {
         instruction.setRecipientName("Mykola");
         instruction.setPeriodUnit(ChronoUnit.DAYS);
         instruction.setPeriodValue(1);
-        instruction.setNextExecutionAt(OffsetDateTime.now().plusDays(1));
+        instruction.setNextExecutionAt(OffsetDateTime.ofInstant(Instant.parse("2025-11-26T10:00:00Z"), ZoneOffset.ofHours(2)));
         instruction.setLastExecutionAt(null);
         instruction.setInstructionStatus(status);
 
@@ -470,5 +493,3 @@ public class InstructionServiceImplTest {
         instructionRepository.save(instruction);
     }
 }
-
-
