@@ -1,5 +1,6 @@
 package com.test.payment_pbls.controllers;
 
+import com.test.payment_pbls.dtos.BatchResultDTO;
 import com.test.payment_pbls.dtos.TransactionDTO;
 import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.services.TransactionService;
@@ -43,5 +44,13 @@ public class TransactionController {
         List<TransactionDTO> result = transactionService.getInstructionHistory(instructionId);
 
         return ResponseEntity.status(HttpStatus.OK).body(result);
+    }
+
+    @PostMapping("/batch")
+    public ResponseEntity<BatchResultDTO> createTransactionsBatch(@RequestBody List<Instruction> instructions) {
+
+        BatchResultDTO result = transactionService.processBatch(instructions);
+
+        return ResponseEntity.ok(result);
     }
 }

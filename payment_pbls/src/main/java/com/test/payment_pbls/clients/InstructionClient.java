@@ -1,41 +1,38 @@
 package com.test.payment_pbls.clients;
 
-import com.test.payment_pbls.dtos.InstructionCreateDTO;
 import com.test.payment_pbls.dtos.Instruction;
+import com.test.payment_pbls.dtos.InstructionCreateDTO;
 import com.test.payment_pbls.utils.exceptions.CreationFailureException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 
 @Component
 public class InstructionClient {
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final String serverUrl;
 
     @Autowired
-    public InstructionClient(RestTemplate restTemplate, @Value("${application.server.pds}") String url) {
-        this.restTemplate = restTemplate;
+    public InstructionClient(RestClient restClient, @Value("${application.server.pds}") String url) {
+        this.restClient = restClient;
         this.serverUrl = url;
     }
 
     public Instruction createInstruction(InstructionCreateDTO instructionCreateDTO) {
-
         try {
-
-            return restTemplate.postForEntity(serverUrl + "/instructions", instructionCreateDTO, Instruction.class).getBody();
-
-//        } catch (DataIntegrityViolationException e) {
-//            // Це може статися, якщо PBLS не перехопив порушення UNIQUE INDEX
-//            // або NOT NULL обмеження.
-//            throw new CreationFailureException("PDS rejected instruction due to data integrity constraints.", e);
+            return restClient.post()
+                    .uri(serverUrl + "/instructions")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(instructionCreateDTO)
+                    .retrieve()
+                    .body(Instruction.class);
 
         } catch (RestClientException e) {
             throw new CreationFailureException("Failed to save instruction in PDS: Service communication error.");
@@ -45,18 +42,13 @@ public class InstructionClient {
     }
 
     public List<Instruction> getInstructionsForIin(String iin) {
-
         try {
+            return restClient.get()
+                    // Використовуємо {placeholders} замість .formatted() - це безпечніше і правильніше
+                    .uri(serverUrl + "/instructions/search/iin/{iin}", iin)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
 
-            ResponseEntity<List<Instruction>> response = restTemplate.exchange(
-                    serverUrl + "/instructions/search/iin/%s".formatted(iin),
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<>() {
-                    }
-            );
-
-            return response.getBody();
         } catch (RestClientException e) {
             throw new CreationFailureException("Failed to search instruction in PDS: Service communication error.");
         } catch (Exception e) {
@@ -65,17 +57,12 @@ public class InstructionClient {
     }
 
     public List<Instruction> getInstructionsForEdrpou(String edrpou) {
-
         try {
-            ResponseEntity<List<Instruction>> response = restTemplate.exchange(
-                    serverUrl + "/instructions/search/edrpou/%s".formatted(edrpou),
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<>() {
-                    }
-            );
+            return restClient.get()
+                    .uri(serverUrl + "/instructions/search/edrpou/{edrpou}", edrpou)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
 
-            return response.getBody();
         } catch (RestClientException e) {
             throw new CreationFailureException("Failed to search instruction in PDS: Service communication error.");
         } catch (Exception e) {
@@ -83,18 +70,13 @@ public class InstructionClient {
         }
     }
 
-    public List<Instruction> getAllActiveInstructions() {
-
+    public List<Instruction> getScheduledInstructions(int page, int size) {
         try {
-            ResponseEntity<List<Instruction>> response = restTemplate.exchange(
-                    serverUrl + "/instructions/all",
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<>() {
-                    }
-            );
+            return restClient.get()
+                    .uri(serverUrl + "/instructions/scheduled?page={page}&size={size}", page, size)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
 
-            return response.getBody();
         } catch (RestClientException e) {
             throw new CreationFailureException("Failed to search instruction in PDS: Service communication error.");
         } catch (Exception e) {

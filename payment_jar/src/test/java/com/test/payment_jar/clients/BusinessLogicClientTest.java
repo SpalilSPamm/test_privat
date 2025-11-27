@@ -1,165 +1,137 @@
 package com.test.payment_jar.clients;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.test.payment_jar.models.Instruction;
-import com.test.payment_jar.utils.enums.InstructionStatus;
 import com.test.payment_jar.utils.exceptions.CreationFailureException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.client.RestClientTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
-@ExtendWith(MockitoExtension.class)
-public class BusinessLogicClientTest {
+@RestClientTest(components = BusinessLogicClient.class)
+class BusinessLogicClientTest {
 
-    @Mock
-    private RestTemplate restTemplate;
+    @Autowired
+    private BusinessLogicClient client;
 
-    @InjectMocks
-    private BusinessLogicClient businessLogicClient;
+    @Autowired
+    private MockRestServiceServer server;
 
-    private static final String SERVER_URL = "http://localhost:8181";
-    private Instruction mockInstruction;
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    private final String serverUrl = "http://localhost:8181";
+
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        public RestClient restClient(RestClient.Builder builder) {
+            return builder.build();
+        }
+    }
 
     @BeforeEach
     void setUp() {
-        businessLogicClient = new BusinessLogicClient(restTemplate, "http://localhost:8181");
-        mockInstruction = createMockInstruction();
+        server.reset();
     }
 
     @Test
-    void getAllActiveInstructions_shouldReturnListOnSuccess() {
+    void getScheduledInstructions_ShouldReturnList_WhenServerReturns200() throws JsonProcessingException {
 
-        List<Instruction> expectedList = List.of(mockInstruction);
-        ResponseEntity<List<Instruction>> mockResponse = new ResponseEntity<>(expectedList, HttpStatus.OK);
-
-        when(restTemplate.exchange(
-                eq(SERVER_URL + "/instructions/all"),
-                eq(HttpMethod.GET),
-                isNull(),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(mockResponse);
-
-        List<Instruction> result = businessLogicClient.getAllActiveInstructions();
-
-        assertFalse(result.isEmpty());
-        assertEquals(1, result.size());
-        assertEquals(mockInstruction.getId(), result.getFirst().getId());
-
-        verify(restTemplate, times(1)).exchange(
-                eq(SERVER_URL + "/instructions/all"),
-                eq(HttpMethod.GET),
-                isNull(),
-                any(ParameterizedTypeReference.class)
+        int page = 0;
+        int size = 10;
+        List<Instruction> expectedInstructions = List.of(
+                createInstruction(1L, "100.00"),
+                createInstruction(2L, "200.00")
         );
+        String responseJson = objectMapper.writeValueAsString(expectedInstructions);
+
+        server.expect(requestTo(serverUrl + "/instructions/scheduled?page=" + page + "&size=" + size))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(responseJson, MediaType.APPLICATION_JSON));
+
+        List<Instruction> result = client.getScheduledInstructions(page, size);
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals(1L, result.getFirst().getId());
+
+        server.verify();
     }
 
     @Test
-    void getAllActiveInstructions_shouldReturnEmptyListOnRestClientException() {
+    void getScheduledInstructions_ShouldReturnEmptyList_WhenServerReturnsError() {
 
-        when(restTemplate.exchange(
-                eq(SERVER_URL + "/instructions/all"),
-                eq(HttpMethod.GET),
-                isNull(),
-                any(ParameterizedTypeReference.class)
-        )).thenThrow(new RestClientException("Connection refused."));
+        int page = 0;
+        int size = 10;
 
-        List<Instruction> result = businessLogicClient.getAllActiveInstructions();
+        server.expect(requestTo(serverUrl + "/instructions/scheduled?page=" + page + "&size=" + size))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withServerError());
 
+        List<Instruction> result = client.getScheduledInstructions(page, size);
+
+
+        assertNotNull(result);
         assertTrue(result.isEmpty());
-        verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.GET), isNull(), any(ParameterizedTypeReference.class));
+
+        server.verify();
     }
 
     @Test
-    void getAllActiveInstructions_shouldReturnEmptyListOnGeneralException() {
+    void createTransactionsBatch_ShouldSucceed_WhenServerReturns200() throws JsonProcessingException {
 
-        when(restTemplate.exchange(
-                eq(SERVER_URL + "/instructions/all"),
-                eq(HttpMethod.GET),
-                isNull(),
-                any(ParameterizedTypeReference.class)
-        )).thenThrow(new RuntimeException("Unexpected error."));
+        List<Instruction> instructions = List.of(createInstruction(1L, "100.00"));
+        String requestJson = objectMapper.writeValueAsString(instructions);
 
-        List<Instruction> result = businessLogicClient.getAllActiveInstructions();
+        server.expect(requestTo(serverUrl + "/transactions/batch"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(content().json(requestJson))
+                .andRespond(withSuccess()); // 200 OK (без тіла)
 
-        assertTrue(result.isEmpty());
-        verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.GET), isNull(), any(ParameterizedTypeReference.class));
+        assertDoesNotThrow(() -> client.createTransactionsBatch(instructions));
+
+        server.verify();
     }
 
     @Test
-    void createTransaction_shouldCompleteSuccessfully() {
+    void createTransactionsBatch_ShouldThrowException_WhenServerReturnsError() throws JsonProcessingException {
 
-        when(restTemplate.postForEntity(
-                eq(SERVER_URL + "/transactions"),
-                eq(mockInstruction),
-                eq(Void.class)
-        )).thenReturn(new ResponseEntity<>(HttpStatus.CREATED));
+        List<Instruction> instructions = List.of(createInstruction(1L, "100.00"));
 
-        assertDoesNotThrow(() -> businessLogicClient.createTransaction(mockInstruction));
+        System.out.println(serverUrl);
 
-        verify(restTemplate, times(1)).postForEntity(
-                eq(SERVER_URL + "/transactions"),
-                eq(mockInstruction),
-                eq(Void.class)
-        );
-    }
-
-    @Test
-    void createTransaction_shouldThrowCreationFailureExceptionOnRestClientError() {
-
-        when(restTemplate.postForEntity(
-                eq(SERVER_URL + "/transactions"),
-                eq(mockInstruction),
-                eq(Void.class)
-        )).thenThrow(new RestClientException("Service communication error."));
+        server.expect(requestTo(serverUrl + "/transactions/batch"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withBadRequest());
 
         CreationFailureException exception = assertThrows(CreationFailureException.class,
-                () -> businessLogicClient.createTransaction(mockInstruction));
+                () -> client.createTransactionsBatch(instructions));
 
-        assertTrue(exception.getMessage().contains("Service communication error."));
-        verify(restTemplate, times(1)).postForEntity(anyString(), any(), eq(Void.class));
+        assertEquals("Batch creation failed", exception.getMessage());
+
+        server.verify();
     }
-
-    @Test
-    void createTransaction_shouldThrowCreationFailureExceptionOnGeneralException() {
-
-        when(restTemplate.postForEntity(
-                eq(SERVER_URL + "/transactions"),
-                eq(mockInstruction),
-                eq(Void.class)
-        )).thenThrow(new RuntimeException("JSON serialization error."));
-
-        CreationFailureException exception = assertThrows(CreationFailureException.class,
-                () -> businessLogicClient.createTransaction(mockInstruction));
-
-        assertTrue(exception.getMessage().contains("An unexpected error occurred during instruction creation."));
-        verify(restTemplate, times(1)).postForEntity(anyString(), any(), eq(Void.class));
-    }
-
-    private Instruction createMockInstruction() {
+    
+    private Instruction createInstruction(Long id, String amount) {
         Instruction instruction = new Instruction();
-        instruction.setId(1L);
-        instruction.setAmount(new BigDecimal("100.00"));
-        instruction.setInstructionStatus(InstructionStatus.ACTIVE);
-        instruction.setNextExecutionAt(OffsetDateTime.now().plus(1, ChronoUnit.HOURS));
+        instruction.setId(id);
+        instruction.setAmount(new BigDecimal(amount));
         return instruction;
     }
-
 }

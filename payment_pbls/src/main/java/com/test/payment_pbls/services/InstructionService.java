@@ -10,5 +10,5 @@ public interface InstructionService {
     Instruction createInstruction(InstructionValidDTO instructionValidDTO);
     List<Instruction> getInstructionsByPayerIin(String payerIin);
     List<Instruction> getInstructionsByRecipientEdrpou(String recipientEdrpou);
-    List<Instruction> getAllActiveInstruction();
+    List<Instruction> getScheduledInstructions(int page, int size);
 }

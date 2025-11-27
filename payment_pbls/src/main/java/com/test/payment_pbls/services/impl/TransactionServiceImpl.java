@@ -1,6 +1,7 @@
 package com.test.payment_pbls.services.impl;
 
 import com.test.payment_pbls.clients.TransactionClient;
+import com.test.payment_pbls.dtos.BatchResultDTO;
 import com.test.payment_pbls.dtos.TransactionDTO;
 import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.dtos.Transaction;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -76,5 +78,23 @@ public class TransactionServiceImpl implements TransactionService {
         log.debug("PBLS: Retrieved {} transactions.", history.size());
 
         return history;
+    }
+
+    @Override
+    public BatchResultDTO processBatch(List<Instruction> instructions) {
+        int success = 0;
+        List<Long> failedIds = new ArrayList<>();
+
+        for (Instruction instruction : instructions) {
+            try {
+                createTransaction(instruction);
+                success++;
+            } catch (Exception e) {
+                log.error("Failed to process instruction {}", instruction.getId(), e);
+                failedIds.add(instruction.getId());
+            }
+        }
+
+        return new BatchResultDTO(success, failedIds.size(), failedIds);
     }
 }

@@ -1,5 +1,7 @@
 package com.test.payment_pbls.clients;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.dtos.Transaction;
 import com.test.payment_pbls.dtos.TransactionDTO;
@@ -7,18 +9,15 @@ import com.test.payment_pbls.utils.enums.TransactionStatus;
 import com.test.payment_pbls.utils.exceptions.CreationFailureException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.client.RestClientTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestClientException;
-
-import org.springframework.web.client.RestTemplate;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -26,143 +25,154 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
 
-@ExtendWith(MockitoExtension.class)
-public class TransactionClientTest {
+@RestClientTest(TransactionClient.class)
+@TestPropertySource(properties = "application.server.pds=http://localhost:8180")
+class TransactionClientTest {
 
-    @Mock
-    private RestTemplate restTemplate;
-
-    @InjectMocks
+    @Autowired
     private TransactionClient transactionClient;
 
-    private static final String MOCK_PDS_URL = "http://localhost";
-    private static final Long TRANSACTION_ID = 50L;
-    private static final Long INSTRUCTION_ID = 10L;
+    @Autowired
+    private MockRestServiceServer server;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    private final String serverUrl = "http://localhost:8180";
+
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        public RestClient restClient(RestClient.Builder builder) {
+            return builder.build();
+        }
+    }
 
     @BeforeEach
     void setUp() {
-        transactionClient.serverUrl = MOCK_PDS_URL;
+        server.reset();
     }
 
     @Test
-    void createTransaction_shouldReturnTransactionOnSuccess() {
+    void createTransaction_ShouldReturnTransactionDTO_WhenServerReturnsSuccess() throws JsonProcessingException {
 
-        Transaction inputTransaction = createMockTransaction();
-        TransactionDTO transactionDTO = createMockTransactionDTO();
+        Transaction transaction = createDummyTransaction();
+        TransactionDTO expectedResponse = createDummyTransactionDTO();
 
-        when(restTemplate.postForEntity(
-                eq(MOCK_PDS_URL + "/transactions"),
-                eq(inputTransaction),
-                eq(TransactionDTO.class))
-        ).thenReturn(new ResponseEntity<>(transactionDTO, HttpStatus.CREATED));
+        server.expect(requestTo(serverUrl + "/transactions"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(content().json(objectMapper.writeValueAsString(transaction)))
+                .andRespond(withSuccess(objectMapper.writeValueAsString(expectedResponse), MediaType.APPLICATION_JSON));
 
-        TransactionDTO result = transactionClient.createTransaction(inputTransaction);
+        TransactionDTO result = transactionClient.createTransaction(transaction);
 
         assertNotNull(result);
-        assertEquals(TRANSACTION_ID, result.id());
+        assertEquals(expectedResponse.id(), result.id());
+        assertEquals(expectedResponse.amount(), result.amount());
+
+        server.verify();
     }
 
     @Test
-    void createTransaction_shouldThrowFailureExceptionOnRestClientError() {
+    void createTransaction_ShouldThrowCreationFailureException_WhenServerReturnsError() {
 
-        Transaction inputTransaction = createMockTransaction();
+        Transaction transaction = createDummyTransaction();
 
-        when(restTemplate.postForEntity(
-                eq(MOCK_PDS_URL + "/transactions"),
-                eq(inputTransaction),
-                eq(TransactionDTO.class))
-        ).thenThrow(new HttpClientErrorException(HttpStatus.BAD_REQUEST));
+        server.expect(requestTo(serverUrl + "/transactions"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withBadRequest());
 
         CreationFailureException exception = assertThrows(CreationFailureException.class,
-                () -> transactionClient.createTransaction(inputTransaction));
+                () -> transactionClient.createTransaction(transaction));
 
-        assert(exception.getMessage().contains("Service communication error."));
+        assertEquals("Failed to save instruction in PDS: Service communication error.", exception.getMessage());
+        server.verify();
     }
 
     @Test
-    void revertTransaction_shouldCallDeleteOnSuccess() {
+    void revertTransaction_ShouldSucceed_WhenServerReturnsSuccess() {
 
-        String expectedUrl = MOCK_PDS_URL + "/transactions/" + TRANSACTION_ID;
+        Long transactionId = 123L;
 
-        assertDoesNotThrow(() -> transactionClient.revertTransaction(TRANSACTION_ID));
+        server.expect(requestTo(serverUrl + "/transactions/" + transactionId))
+                .andExpect(method(HttpMethod.DELETE))
+                .andRespond(withSuccess());
 
-        verify(restTemplate).delete(eq(expectedUrl));
+        assertDoesNotThrow(() -> transactionClient.revertTransaction(transactionId));
+
+        server.verify();
     }
 
     @Test
-    void revertTransaction_shouldThrowFailureExceptionOnRestClientError() {
+    void revertTransaction_ShouldThrowException_WhenServerReturnsError() {
 
-        Long transactionId = 50L;
-        String expectedUrl = MOCK_PDS_URL + "/transactions/" + transactionId;
+        Long transactionId = 123L;
 
-        doThrow(new RestClientException("PDS is unreachable."))
-                .when(restTemplate).delete(eq(expectedUrl));
+        server.expect(requestTo(serverUrl + "/transactions/" + transactionId))
+                .andExpect(method(HttpMethod.DELETE))
+                .andRespond(withServerError());
 
         CreationFailureException exception = assertThrows(CreationFailureException.class,
                 () -> transactionClient.revertTransaction(transactionId));
 
-        assert(exception.getMessage().contains("Service communication error."));
-
-        verify(restTemplate).delete(eq(expectedUrl));
+        assertTrue(exception.getMessage().contains("Failed to save instruction")); // Сообщение из вашего кода
+        server.verify();
     }
 
     @Test
-    void getTransactionsByInstructionId_shouldReturnListOnSuccess() {
+    void getTransactionsByInstructionId_ShouldReturnList_WhenServerReturnsSuccess() throws JsonProcessingException {
 
-        List<TransactionDTO> expectedList = List.of(createMockTransactionDTO());
-        ResponseEntity<List<TransactionDTO>> mockResponse = new ResponseEntity<>(expectedList, HttpStatus.OK);
+        Long instructionId = 10L;
+        List<TransactionDTO> expectedList = List.of(createDummyTransactionDTO());
 
-        when(restTemplate.exchange(
-                eq(MOCK_PDS_URL + "/transactions/instruction/" + INSTRUCTION_ID),
-                eq(HttpMethod.GET),
-                isNull(),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(mockResponse);
+        server.expect(requestTo(serverUrl + "/transactions/instruction/" + instructionId))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(objectMapper.writeValueAsString(expectedList), MediaType.APPLICATION_JSON));
 
-        List<TransactionDTO> result = transactionClient.getTransactionsByInstructionId(INSTRUCTION_ID);
+        List<TransactionDTO> result = transactionClient.getTransactionsByInstructionId(instructionId);
 
         assertFalse(result.isEmpty());
         assertEquals(1, result.size());
+        assertEquals(expectedList.getFirst().id(), result.getFirst().id());
+
+        server.verify();
     }
 
     @Test
-    void getTransactionsByInstructionId_shouldThrowFailureExceptionOnUnexpectedError() {
+    void getTransactionsByInstructionId_ShouldThrowException_WhenServerReturnsError() {
 
-        when(restTemplate.exchange(
-                eq(MOCK_PDS_URL + "/transactions/instruction/" + INSTRUCTION_ID),
-                eq(HttpMethod.GET),
-                isNull(),
-                any(ParameterizedTypeReference.class)
-        )).thenThrow(new RuntimeException("Parsing error in response."));
+        Long instructionId = 10L;
+
+        server.expect(requestTo(serverUrl + "/transactions/instruction/" + instructionId))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withBadRequest());
 
         CreationFailureException exception = assertThrows(CreationFailureException.class,
-                () -> transactionClient.getTransactionsByInstructionId(INSTRUCTION_ID));
+                () -> transactionClient.getTransactionsByInstructionId(instructionId));
 
-        assert(exception.getMessage().contains("An unexpected error occurred during instruction search."));
+        assertTrue(exception.getMessage().contains("Failed to search instruction"));
+        server.verify();
     }
 
-    private Transaction createMockTransaction() {
-
-        Instruction inputInstruction = new Instruction();
-        inputInstruction.setId(100L);
-
+    private Transaction createDummyTransaction() {
         Transaction transaction = new Transaction();
-        transaction.setId(TRANSACTION_ID);
-        transaction.setInstruction(inputInstruction);
-        transaction.setAmount(new BigDecimal("10.00"));
-        transaction.setTransactionStatus(TransactionStatus.ACTIVE.getStatusCode());
+        transaction.setAmount(new BigDecimal("100.00"));
         transaction.setIdempotencyId(UUID.randomUUID().toString());
+        Instruction instruction = new Instruction();
+        instruction.setId(1L);
+        transaction.setInstruction(instruction);
         return transaction;
     }
 
-    private TransactionDTO createMockTransactionDTO() {
+    private TransactionDTO createDummyTransactionDTO() {
         return new TransactionDTO(
-                TRANSACTION_ID,
-                INSTRUCTION_ID,
+                55L,
+                1L,
                 UUID.randomUUID().toString(),
                 new BigDecimal("100.00"),
                 OffsetDateTime.now(),

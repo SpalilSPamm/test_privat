@@ -73,7 +73,7 @@ public class InstructionServiceImpl implements InstructionService {
     }
 
     @Override
-    public List<Instruction> getAllActiveInstruction() {
-        return instructionClient.getAllActiveInstructions();
+    public List<Instruction> getScheduledInstructions(int page, int size) {
+        return instructionClient.getScheduledInstructions(page, size);
     }
 }

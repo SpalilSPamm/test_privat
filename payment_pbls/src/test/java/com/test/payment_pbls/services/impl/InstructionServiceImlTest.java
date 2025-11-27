@@ -223,6 +223,57 @@ public class InstructionServiceImlTest {
         verify(instructionClient, never()).getInstructionsForEdrpou(anyString());
     }
 
+    @Test
+    void getScheduledInstructions_ShouldReturnListFromClient() {
+
+        int page = 0;
+        int size = 50;
+        List<Instruction> expectedList = List.of(new Instruction(), new Instruction());
+
+        when(instructionClient.getScheduledInstructions(page, size))
+                .thenReturn(expectedList);
+
+        List<Instruction> result = instructionService.getScheduledInstructions(page, size);
+
+        assertNotNull(result);
+        assertEquals(expectedList.size(), result.size());
+        assertEquals(expectedList, result);
+
+        verify(instructionClient, times(1)).getScheduledInstructions(page, size);
+    }
+
+    @Test
+    void getScheduledInstructions_ShouldReturnEmptyList_WhenClientReturnsEmpty() {
+
+        int page = 1;
+        int size = 100;
+
+        when(instructionClient.getScheduledInstructions(page, size))
+                .thenReturn(Collections.emptyList());
+
+        List<Instruction> result = instructionService.getScheduledInstructions(page, size);
+
+        assertTrue(result.isEmpty());
+        verify(instructionClient, times(1)).getScheduledInstructions(page, size);
+    }
+
+    @Test
+    void getScheduledInstructions_ShouldPropagateException_WhenClientFails() {
+
+        int page = 0;
+        int size = 10;
+        String errorMessage = "Service unavailable";
+
+        when(instructionClient.getScheduledInstructions(anyInt(), anyInt()))
+                .thenThrow(new CreationFailureException(errorMessage));
+
+        CreationFailureException exception = assertThrows(CreationFailureException.class,
+                () -> instructionService.getScheduledInstructions(page, size));
+
+        assertEquals(errorMessage, exception.getMessage());
+        verify(instructionClient, times(1)).getScheduledInstructions(page, size);
+    }
+
     private InstructionValidDTO createValidInstructionDTO() {
         return new InstructionValidDTO(
                 "Іван", "Іваненко", "Іванович",

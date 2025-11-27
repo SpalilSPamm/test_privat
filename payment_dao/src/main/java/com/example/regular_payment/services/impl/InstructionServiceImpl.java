@@ -9,6 +9,8 @@ import com.example.regular_payment.utils.exceptions.InstructionNotFoundException
 
 import com.example.regular_payment.utils.mappers.InstructionMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -97,7 +99,7 @@ public class InstructionServiceImpl implements InstructionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Instruction> getAllActiveInstructions() {
-        return instructionRepository.getInstructionsByInstructionStatusAndNextExecutionAtBefore(InstructionStatus.ACTIVE, OffsetDateTime.now(clock));
+    public Slice<Instruction> getScheduledInstructions(Pageable pageable) {
+        return instructionRepository.findByInstructionStatusAndNextExecutionAtBefore(InstructionStatus.ACTIVE, OffsetDateTime.now(clock), pageable);
     }
 }
