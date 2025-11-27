@@ -6,6 +6,9 @@ import com.example.regular_payment.models.Instruction;
 import com.example.regular_payment.services.InstructionService;
 import com.example.regular_payment.utils.mappers.InstructionMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -80,9 +83,19 @@ public class InstructionController {
         return ResponseEntity.status(HttpStatus.OK).body(result);
     }
 
-    @GetMapping("/all")
-    public ResponseEntity<List<InstructionDTO>> getAllActiveInstruction() {
-        List<InstructionDTO> result = instructionService.getAllActiveInstructions().stream().map(instructionMapper::toDTO).toList();
-        return ResponseEntity.status(HttpStatus.OK).body(result);
+    @GetMapping("/scheduled")
+    public ResponseEntity<List<InstructionDTO>> getScheduledInstructions(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1000") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size);
+
+        Slice<Instruction> slice = instructionService.getScheduledInstructions(pageable);
+
+        List<InstructionDTO> dtos = slice.getContent().stream()
+                .map(instructionMapper::toDTO)
+                .toList();
+
+        return ResponseEntity.ok(dtos);
     }
 }

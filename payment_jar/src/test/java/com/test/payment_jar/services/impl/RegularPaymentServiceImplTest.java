@@ -3,21 +3,23 @@ package com.test.payment_jar.services.impl;
 import com.test.payment_jar.clients.BusinessLogicClient;
 import com.test.payment_jar.models.Instruction;
 import com.test.payment_jar.utils.exceptions.CreationFailureException;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class RegularPaymentServiceImplTest {
+class RegularPaymentServiceImplTest {
 
     @Mock
     private BusinessLogicClient businessLogicClient;
@@ -25,63 +27,94 @@ public class RegularPaymentServiceImplTest {
     @InjectMocks
     private RegularPaymentServiceImpl regularPaymentService;
 
-    private Instruction instruction1;
-    private Instruction instruction2;
-
-    @BeforeEach
-    void setUp() {
-        instruction1 = createInstruction(1L, "100.00");
-        instruction2 = createInstruction(2L, "250.50");
-    }
+    private static final int PAGE_SIZE = 1000;
 
     @Test
-    void processPayments_shouldCreateTransactionForEachInstruction() {
+    void processPayments_ShouldDoNothing_WhenNoInstructionsReturned() {
 
-        List<Instruction> instructions = List.of(instruction1, instruction2);
-        when(businessLogicClient.getAllActiveInstructions()).thenReturn(instructions);
+        when(businessLogicClient.getScheduledInstructions(anyInt(), anyInt()))
+                .thenReturn(Collections.emptyList());
 
         regularPaymentService.processPayments();
 
-        verify(businessLogicClient, times(1)).getAllActiveInstructions();
-        verify(businessLogicClient, times(1)).createTransaction(instruction1);
-        verify(businessLogicClient, times(1)).createTransaction(instruction2);
+        verify(businessLogicClient, times(1)).getScheduledInstructions(eq(0), eq(PAGE_SIZE));
+        verify(businessLogicClient, never()).createTransactionsBatch(anyList());
     }
 
     @Test
-    void processPayments_shouldNotCreateTransactionWhenNoInstructions() {
+    void processPayments_ShouldProcessOneBatch_WhenResultIsLessThanPageSize() {
 
-        when(businessLogicClient.getAllActiveInstructions()).thenReturn(Collections.emptyList());
+        List<Instruction> smallBatch = createMockInstructions(5);
+
+        when(businessLogicClient.getScheduledInstructions(eq(0), eq(PAGE_SIZE)))
+                .thenReturn(smallBatch);
 
         regularPaymentService.processPayments();
 
-        verify(businessLogicClient, times(1)).getAllActiveInstructions();
+        verify(businessLogicClient, times(1)).getScheduledInstructions(eq(0), eq(PAGE_SIZE));
 
-        verify(businessLogicClient, never()).createTransaction(any(Instruction.class));
+        verify(businessLogicClient, times(1)).createTransactionsBatch(smallBatch);
     }
 
     @Test
-    void processPayments_shouldContinueAfterCreationFailure() {
+    void processPayments_ShouldProcessMultipleBatches_WhenFirstBatchIsFull() {
 
-        List<Instruction> instructions = List.of(instruction1, instruction2);
-        when(businessLogicClient.getAllActiveInstructions()).thenReturn(instructions);
+        List<Instruction> fullBatch = createMockInstructions(PAGE_SIZE);
 
-        doThrow(new CreationFailureException("Balance check failed"))
-                .when(businessLogicClient).createTransaction(instruction1);
+        List<Instruction> lastBatch = createMockInstructions(50);
 
-        doNothing().when(businessLogicClient).createTransaction(instruction2);
+        when(businessLogicClient.getScheduledInstructions(eq(0), eq(PAGE_SIZE)))
+                .thenReturn(fullBatch)
+                .thenReturn(lastBatch);
 
         regularPaymentService.processPayments();
 
-        verify(businessLogicClient, times(1)).createTransaction(instruction1);
-        verify(businessLogicClient, times(1)).createTransaction(instruction2);
+        InOrder inOrder = inOrder(businessLogicClient);
 
-        verify(businessLogicClient, times(1)).getAllActiveInstructions();
+        inOrder.verify(businessLogicClient).getScheduledInstructions(0, PAGE_SIZE);
+        inOrder.verify(businessLogicClient).createTransactionsBatch(fullBatch);
+
+        inOrder.verify(businessLogicClient).getScheduledInstructions(0, PAGE_SIZE);
+        inOrder.verify(businessLogicClient).createTransactionsBatch(lastBatch);
+
+        verify(businessLogicClient, times(2)).getScheduledInstructions(anyInt(), anyInt());
     }
 
-    private Instruction createInstruction(Long id, String amount) {
-        Instruction instruction = new Instruction();
-        instruction.setId(id);
-        instruction.setAmount(new BigDecimal(amount));
-        return instruction;
+    @Test
+    void processPayments_ShouldStop_WhenBatchIsFullButNextIsEmpty() {
+
+        List<Instruction> fullBatch = createMockInstructions(PAGE_SIZE);
+        List<Instruction> emptyBatch = Collections.emptyList();
+
+        when(businessLogicClient.getScheduledInstructions(eq(0), eq(PAGE_SIZE)))
+                .thenReturn(fullBatch)
+                .thenReturn(emptyBatch);
+
+        regularPaymentService.processPayments();
+
+        verify(businessLogicClient, times(2)).getScheduledInstructions(0, PAGE_SIZE);
+
+        verify(businessLogicClient, times(1)).createTransactionsBatch(anyList());
+        verify(businessLogicClient).createTransactionsBatch(fullBatch);
+    }
+
+    @Test
+    void processPayments_ShouldPropagateException_WhenClientFails() {
+
+        when(businessLogicClient.getScheduledInstructions(anyInt(), anyInt()))
+                .thenThrow(new CreationFailureException("Service Unavailable"));
+
+
+        assertThrows(CreationFailureException.class, () -> regularPaymentService.processPayments());
+    }
+
+    private List<Instruction> createMockInstructions(int count) {
+        return IntStream.range(0, count)
+                .mapToObj(i -> {
+                    Instruction instruction = new Instruction();
+                    instruction.setId((long) i);
+                    return instruction;
+                })
+                .collect(Collectors.toList());
     }
 }

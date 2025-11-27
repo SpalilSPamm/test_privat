@@ -46,9 +46,12 @@ public class InstructionController {
         return ResponseEntity.status(HttpStatus.OK).body(result);
     }
 
-    @GetMapping("/all")
-    public ResponseEntity<List<Instruction>> getAllActiveInstruction() {
-        List<Instruction> result = instructionService.getAllActiveInstruction();
+    @GetMapping("/scheduled")
+    public ResponseEntity<List<Instruction>> getScheduledInstructions(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1000") int size
+    ) {
+        List<Instruction> result = instructionService.getScheduledInstructions(page, size);
 
         return ResponseEntity.status(HttpStatus.OK).body(result);
     }

@@ -6,11 +6,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
 
@@ -18,49 +17,48 @@ import java.util.List;
 @Component
 public class BusinessLogicClient {
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final String serverUrl;
 
 
     @Autowired
-    public BusinessLogicClient(RestTemplate restTemplate, @Value("${application.server.pbls}")  String serverUrl) {
-        this.restTemplate = restTemplate;
+    public BusinessLogicClient(RestClient restClient, @Value("${application.server.pbls}") String serverUrl) {
+        this.restClient = restClient;
         this.serverUrl = serverUrl;
     }
 
-    public List<Instruction> getAllActiveInstructions() {
-
+    public List<Instruction> getScheduledInstructions(int page, int size) {
         try {
+            String uri = UriComponentsBuilder.fromUriString(serverUrl)
+                    .path("/instructions/scheduled")
+                    .queryParam("page", page)
+                    .queryParam("size", size)
+                    .toUriString();
 
-
-            ResponseEntity<List<Instruction>> response = restTemplate.exchange(
-                    serverUrl + "/instructions/all",
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<>() {
-                    }
-            );
-
-            return response.getBody();
-        } catch (RestClientException e) {
-            log.error("Failed to search instruction in PBLS: Service communication error.");
-            return List.of();
+            return restClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
         } catch (Exception e) {
-            log.error("An unexpected error occurred during instruction search.");
+            log.error("Failed to fetch instructions from PBLS", e);
             return List.of();
         }
     }
 
-    public void createTransaction(Instruction instruction) {
-
+    public void createTransactionsBatch(List<Instruction> instructions) {
         try {
-
-            restTemplate.postForEntity(serverUrl + "/transactions", instruction, Void.class);
-
-        } catch (RestClientException e) {
-            throw new CreationFailureException("Failed to save instruction in PDS: Service communication error.");
+            String uri = UriComponentsBuilder.fromUriString(serverUrl)
+                    .path("/transactions/batch")
+                    .toUriString();
+            restClient.post()
+                    .uri(uri)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(instructions)
+                    .retrieve()
+                    .toBodilessEntity();
         } catch (Exception e) {
-            throw new CreationFailureException("An unexpected error occurred during instruction creation.");
+            log.error("Failed to send batch transactions", e);
+            throw new CreationFailureException("Batch creation failed");
         }
     }
 }

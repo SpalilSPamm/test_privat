@@ -2,6 +2,7 @@ package com.test.payment_pbls.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.test.payment_pbls.dtos.BatchResultDTO;
 import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.dtos.TransactionDTO;
 import com.test.payment_pbls.services.TransactionService;
@@ -136,6 +137,45 @@ public class TransactionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    void createTransactionsBatch_ShouldReturnOkAndStats_WhenCalledWithList() throws Exception {
+
+        Instruction instruction1 = new Instruction();
+        instruction1.setId(101L);
+        Instruction instruction2 = new Instruction();
+        instruction2.setId(102L);
+
+        List<Instruction> inputList = List.of(instruction1, instruction2);
+
+        BatchResultDTO mockResult = new BatchResultDTO(1, 1, List.of(102L));
+
+        when(transactionService.processBatch(anyList())).thenReturn(mockResult);
+
+        mockMvc.perform(post("/transactions/batch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(inputList)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.failedInstructionIds[0]").value(102));
+
+        verify(transactionService).processBatch(anyList());
+    }
+
+    @Test
+    void createTransactionsBatch_ShouldHandleEmptyList() throws Exception {
+
+        BatchResultDTO emptyResult = new BatchResultDTO(0, 0, Collections.emptyList());
+
+        when(transactionService.processBatch(anyList())).thenReturn(emptyResult);
+
+        mockMvc.perform(post("/transactions/batch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("[]"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(0));
     }
 
     private Instruction createMockInstruction() {

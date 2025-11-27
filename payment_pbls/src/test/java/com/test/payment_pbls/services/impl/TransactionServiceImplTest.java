@@ -1,6 +1,7 @@
 package com.test.payment_pbls.services.impl;
 
 import com.test.payment_pbls.clients.TransactionClient;
+import com.test.payment_pbls.dtos.BatchResultDTO;
 import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.dtos.Transaction;
 import com.test.payment_pbls.dtos.TransactionDTO;
@@ -14,10 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.List;
@@ -147,6 +145,88 @@ public class TransactionServiceImplTest {
 
         assertThrows(CreationFailureException.class,
                 () -> transactionService.getInstructionHistory(transactionId));
+    }
+
+    @Test
+    void processBatch_ShouldReturnAllSuccess_WhenClientSucceeds() {
+
+        when(clock.instant()).thenReturn(Instant.parse("2025-11-27T10:00:00Z"));
+        when(clock.getZone()).thenReturn(ZoneId.systemDefault());
+
+        Instruction instr1 = createMockInstruction();
+        Instruction instr2 = createMockInstruction();
+        List<Instruction> instructions = List.of(instr1, instr2);
+
+        when(transactionClient.createTransaction(any(Transaction.class)))
+                .thenReturn(new TransactionDTO(1L, 1L, "idempotency", BigDecimal.TEN, null, "A"));
+
+        BatchResultDTO result = transactionService.processBatch(instructions);
+
+        assertEquals(2, result.successCount());
+        assertEquals(0, result.failureCount());
+        assertTrue(result.failedInstructionIds().isEmpty());
+
+        verify(transactionClient, times(2)).createTransaction(any(Transaction.class));
+    }
+
+    @Test
+    void processBatch_ShouldHandleFailures_WhenClientThrowsException() {
+
+        when(clock.instant()).thenReturn(Instant.parse("2025-11-27T10:00:00Z"));
+        when(clock.getZone()).thenReturn(ZoneId.systemDefault());
+
+        Instruction instr1 = createMockInstruction();
+        instr1.setId(1L);
+        Instruction instr2 = createMockInstruction();
+        instr2.setId(20L);
+
+        List<Instruction> instructions = List.of(instr1, instr2);
+
+        when(transactionClient.createTransaction(any(Transaction.class)))
+                .thenReturn(new TransactionDTO(1L, 10L, "key", BigDecimal.TEN, null, "A"))
+                .thenThrow(new CreationFailureException("PDS Error"));
+
+        BatchResultDTO result = transactionService.processBatch(instructions);
+
+        assertEquals(1, result.successCount());
+        assertEquals(1, result.failureCount());
+
+        assertEquals(1, result.failedInstructionIds().size());
+        assertEquals(20L, result.failedInstructionIds().getFirst());
+
+        verify(transactionClient, times(2)).createTransaction(any(Transaction.class));
+    }
+
+    @Test
+    void processBatch_ShouldReturnAllFailures_WhenAllFail() {
+
+        when(clock.instant()).thenReturn(Instant.parse("2025-11-27T10:00:00Z"));
+        when(clock.getZone()).thenReturn(ZoneId.systemDefault());
+
+        List<Instruction> instructions = List.of(createMockInstruction(), createMockInstruction());
+
+        when(transactionClient.createTransaction(any(Transaction.class)))
+                .thenThrow(new RuntimeException("Database down"));
+
+        BatchResultDTO result = transactionService.processBatch(instructions);
+
+        assertEquals(0, result.successCount());
+        assertEquals(2, result.failureCount());
+        assertEquals(2, result.failedInstructionIds().size());
+    }
+
+    @Test
+    void processBatch_ShouldHandleEmptyList() {
+
+        List<Instruction> instructions = Collections.emptyList();
+
+        BatchResultDTO result = transactionService.processBatch(instructions);
+
+        assertEquals(0, result.successCount());
+        assertEquals(0, result.failureCount());
+        assertTrue(result.failedInstructionIds().isEmpty());
+
+        verifyNoInteractions(transactionClient);
     }
 
     private TransactionDTO createMockTransactionDTO() {

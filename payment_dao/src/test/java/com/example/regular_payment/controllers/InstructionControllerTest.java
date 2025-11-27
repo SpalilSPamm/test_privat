@@ -14,6 +14,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -343,40 +347,69 @@ public class InstructionControllerTest {
     }
 
     @Test
-    void shouldReturnActiveInstructionListAnd200() throws Exception {
+    void getScheduledInstructions_ShouldReturnDtoList_WhenDataExists() throws Exception {
 
-        Long testId = 42L;
+        Instruction instruction = new Instruction();
+        instruction.setId(10L);
+        List<Instruction> content = List.of(instruction);
 
-        Instruction entity = createInstructionEntity();
-        InstructionDTO dto = createInstructionDTO(testId);
+        Pageable pageable = PageRequest.of(0, 1000);
+        Slice<Instruction> slice = new SliceImpl<>(content, pageable, true);
 
-        when(instructionService.getAllActiveInstructions())
-                .thenReturn(List.of(entity, entity));
+        InstructionDTO dto = createInstructionDTO(10L);
 
-        when(instructionMapper.toDTO(any(Instruction.class)))
-                .thenReturn(dto);
+        when(instructionService.getScheduledInstructions(any(Pageable.class)))
+                .thenReturn(slice);
 
-        mockMvc.perform(get("/instructions/all")
+        when(instructionMapper.toDTO(instruction)).thenReturn(dto);
+
+        mockMvc.perform(get("/instructions/scheduled")
+                        .param("page", "0")
+                        .param("size", "1000")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[1].payerIin", is("1111111118")))
-                .andExpect(jsonPath("$[1].amount", is(500.50)));
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id", is(10)))
+                .andExpect(jsonPath("$[0].payerFirstName", is("NewName")));
+
+        verify(instructionService).getScheduledInstructions(eq(pageable));
     }
 
     @Test
-    void shouldReturnEmptyListWhenNoActiveInstructionsExist() throws Exception {
+    void getScheduledInstructions_ShouldUseDefaultParams_WhenNoParamsProvided() throws Exception {
 
-        when(instructionService.getAllActiveInstructions())
-                .thenReturn(Collections.emptyList());
+        Pageable defaultPageable = PageRequest.of(0, 1000);
+        Slice<Instruction> emptySlice = new SliceImpl<>(Collections.emptyList(), defaultPageable, false);
 
-        mockMvc.perform(get("/instructions/all")
+        when(instructionService.getScheduledInstructions(any(Pageable.class)))
+                .thenReturn(emptySlice);
+
+        mockMvc.perform(get("/instructions/scheduled")
                         .contentType(MediaType.APPLICATION_JSON))
-
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$", hasSize(0)));
+
+        verify(instructionService).getScheduledInstructions(eq(defaultPageable));
+    }
+
+    @Test
+    void getScheduledInstructions_ShouldUseCustomParams_WhenParamsProvided() throws Exception {
+        // Arrange
+        int page = 5;
+        int size = 50;
+        Pageable customPageable = PageRequest.of(page, size);
+        Slice<Instruction> emptySlice = new SliceImpl<>(Collections.emptyList(), customPageable, false);
+
+        when(instructionService.getScheduledInstructions(any(Pageable.class)))
+                .thenReturn(emptySlice);
+
+        mockMvc.perform(get("/instructions/scheduled")
+                        .param("page", String.valueOf(page))
+                        .param("size", String.valueOf(size))
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+        verify(instructionService).getScheduledInstructions(eq(customPageable));
     }
 
     private Instruction createInstructionEntity() {

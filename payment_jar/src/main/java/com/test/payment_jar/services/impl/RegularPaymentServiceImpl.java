@@ -4,7 +4,6 @@ package com.test.payment_jar.services.impl;
 import com.test.payment_jar.clients.BusinessLogicClient;
 import com.test.payment_jar.models.Instruction;
 import com.test.payment_jar.services.RegularPaymentService;
-import com.test.payment_jar.utils.exceptions.CreationFailureException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -25,16 +24,25 @@ public class RegularPaymentServiceImpl implements RegularPaymentService {
     @Override
     public void processPayments() {
 
-        List<Instruction> allActiveInstruction = businessLogicClient.getAllActiveInstructions();
+        int pageSize = 1000;
+        boolean hasMore = true;
 
-        for (Instruction instruction : allActiveInstruction) {
-            try {
-                    log.info("Create trans with id:{}", instruction.getId());
-                    businessLogicClient.createTransaction(instruction);
-            } catch (CreationFailureException e) {
-                log.error("Failed to create transaction: {}", e.getMessage());
+        while (hasMore) {
+
+            List<Instruction> batch = businessLogicClient.getScheduledInstructions(0, pageSize);
+
+            if (batch.isEmpty()) {
+                hasMore = false;
+                break;
+            }
+
+            log.info("Processing batch of {} instructions", batch.size());
+
+            businessLogicClient.createTransactionsBatch(batch);
+
+            if (batch.size() < pageSize) {
+                hasMore = false;
             }
         }
-
     }
 }

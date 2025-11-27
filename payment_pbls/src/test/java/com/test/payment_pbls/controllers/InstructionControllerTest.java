@@ -202,6 +202,56 @@ public class InstructionControllerTest {
                 .andExpect(jsonPath("$.message").exists());
     }
 
+    @Test
+    void getScheduledInstructions_ShouldReturnListWithDefaultParams_WhenNoParamsProvided() throws Exception {
+
+        int defaultPage = 0;
+        int defaultSize = 1000;
+
+        List<Instruction> mockInstructions = List.of(createMockInstruction(), createMockInstruction());
+
+        when(instructionService.getScheduledInstructions(eq(defaultPage), eq(defaultSize)))
+                .thenReturn(mockInstructions);
+
+        mockMvc.perform(get("/instructions/scheduled")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].id", is(500)))
+                .andExpect(jsonPath("$[1].id", is(500)));
+    }
+
+    @Test
+    void getScheduledInstructions_ShouldReturnListWithCustomParams_WhenParamsProvided() throws Exception {
+
+        int page = 5;
+        int size = 50;
+
+        List<Instruction> mockInstructions = List.of(createMockInstruction());
+
+        when(instructionService.getScheduledInstructions(eq(page), eq(size)))
+                .thenReturn(mockInstructions);
+
+        mockMvc.perform(get("/instructions/scheduled")
+                        .param("page", String.valueOf(page))
+                        .param("size", String.valueOf(size))
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id", is(500)));
+    }
+
+    @Test
+    void getScheduledInstructions_ShouldReturnEmptyList_WhenServiceReturnsEmpty() throws Exception {
+
+        when(instructionService.getScheduledInstructions(eq(0), eq(1000)))
+                .thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/instructions/scheduled"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
     private InstructionValidDTO createValidInstructionDTO() {
         return new InstructionValidDTO(
                 "Іван", "Іваненко", "Іванович",

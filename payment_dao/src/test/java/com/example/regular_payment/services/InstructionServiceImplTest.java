@@ -12,6 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -414,60 +417,74 @@ public class InstructionServiceImplTest {
     }
 
     @Test
-    void shouldReturnOnlyActiveInstructions() {
+    void getScheduledInstructions_ShouldReturnOnlyActiveAndDueInstructionsWithPagination() {
 
-        when(clock.instant()).thenReturn(Instant.parse("2026-11-29T10:00:00Z"));
-        when(clock.getZone()).thenReturn(ZoneOffset.ofHours(2));
+        Instant fixedInstant = Instant.parse("2025-11-27T12:00:00Z");
+        when(clock.instant()).thenReturn(fixedInstant);
+        when(clock.getZone()).thenReturn(ZoneOffset.UTC);
 
-        createAndSaveInstruction( InstructionStatus.ACTIVE, "1111111118");
-        createAndSaveInstruction(InstructionStatus.ACTIVE, "2222222222");
+        OffsetDateTime now = OffsetDateTime.ofInstant(fixedInstant, ZoneOffset.UTC);
 
-        createAndSaveInstruction(InstructionStatus.CANCELED,"3333333333");
+        createAndSaveInstructionWithNextExecution(InstructionStatus.ACTIVE, now.minusMinutes(10));
+        createAndSaveInstructionWithNextExecution(InstructionStatus.ACTIVE, now.minusMinutes(5));
+        createAndSaveInstructionWithNextExecution(InstructionStatus.ACTIVE, now.minusMinutes(1));
 
-        assertEquals(3, instructionRepository.count());
+        createAndSaveInstructionWithNextExecution(InstructionStatus.ACTIVE, now.plusMinutes(10));
 
-        List<Instruction> activeInstructions = instructionService.getAllActiveInstructions();
+        createAndSaveInstructionWithNextExecution(InstructionStatus.CANCELED, now.minusMinutes(10));
 
-        assertEquals(2, activeInstructions.size());
+        Pageable pageable = PageRequest.of(0, 2);
 
-        activeInstructions.forEach(instruction -> assertEquals(InstructionStatus.ACTIVE, instruction.getInstructionStatus()));
+        Slice<Instruction> result = instructionService.getScheduledInstructions(pageable);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getContent()).hasSize(2);
+
+        assertThat(result.hasNext()).isTrue();
+
+        assertThat(result.getContent())
+                .allMatch(i -> i.getInstructionStatus() == InstructionStatus.ACTIVE)
+                .allMatch(i -> i.getNextExecutionAt().isBefore(now));
     }
 
     @Test
-    void shouldReturnEmptyListWhenNoActiveInstructionsExist() {
+    void getScheduledInstructions_ShouldReturnEmptySlice_WhenNoMatches() {
 
-        when(clock.instant()).thenReturn(Instant.parse("2025-11-26T10:00:00Z"));
-        when(clock.getZone()).thenReturn(ZoneOffset.ofHours(2));
+        Instant fixedInstant = Instant.parse("2025-11-27T12:00:00Z");
+        when(clock.instant()).thenReturn(fixedInstant);
+        when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+        OffsetDateTime now = OffsetDateTime.ofInstant(fixedInstant, ZoneOffset.UTC);
 
-        createAndSaveInstruction( InstructionStatus.CANCELED, "1111111118");
-        createAndSaveInstruction(InstructionStatus.CANCELED, "2222222222");
+        createAndSaveInstructionWithNextExecution(InstructionStatus.ACTIVE, now.plusHours(1)); // Майбутнє
+        createAndSaveInstructionWithNextExecution(InstructionStatus.CANCELED, now.minusHours(1)); // Скасовано
 
-        assertEquals(2, instructionRepository.count(), "2222222222");
+        Pageable pageable = PageRequest.of(0, 10);
 
-        List<Instruction> activeInstructions = instructionService.getAllActiveInstructions();
+        Slice<Instruction> result = instructionService.getScheduledInstructions(pageable);
 
-        assertTrue(activeInstructions.isEmpty());
+        assertThat(result).isNotNull();
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.hasNext()).isFalse();
     }
 
-    private void createAndSaveInstruction(InstructionStatus status, String iin) {
-
+    private void createAndSaveInstructionWithNextExecution(InstructionStatus status, OffsetDateTime nextExecutionAt) {
         Instruction instruction = new Instruction();
-
-        instruction.setPayerFirstName("Taras");
-        instruction.setPayerSecondName("Ivanko");
+        instruction.setPayerFirstName("Test");
+        instruction.setPayerSecondName("User");
         instruction.setPayerPatronymic("Tarasovich");
-        instruction.setAmount(new BigDecimal("100.50"));
-        instruction.setPayerIin(iin);
-        instruction.setPayerCardNumber("1234567812345678");
-        instruction.setRecipientSettlementAccount("12345678123456781234567812345");
-        instruction.setRecipientBankCode("000000");
+        instruction.setPayerIin("1234567890");
+        instruction.setPayerCardNumber("1111222233334444");
+        instruction.setRecipientSettlementAccount("UA123456789");
+        instruction.setRecipientBankCode("123456");
         instruction.setRecipientEdrpou("12345678");
-        instruction.setRecipientName("Mykola");
-        instruction.setPeriodUnit(ChronoUnit.DAYS);
+        instruction.setRecipientName("Test Recipient");
+        instruction.setAmount(new BigDecimal("100.00"));
         instruction.setPeriodValue(1);
-        instruction.setNextExecutionAt(OffsetDateTime.ofInstant(Instant.parse("2025-11-26T10:00:00Z"), ZoneOffset.ofHours(2)));
-        instruction.setLastExecutionAt(null);
+        instruction.setPeriodUnit(ChronoUnit.MONTHS);
+
+        // Важливі поля для тесту
         instruction.setInstructionStatus(status);
+        instruction.setNextExecutionAt(nextExecutionAt);
 
         instructionRepository.save(instruction);
     }
