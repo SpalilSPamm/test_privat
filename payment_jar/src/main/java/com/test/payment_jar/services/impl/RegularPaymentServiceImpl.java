@@ -9,20 +9,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.time.Clock;
-import java.time.OffsetDateTime;
 import java.util.List;
 
 @Slf4j
 @Service
 public class RegularPaymentServiceImpl implements RegularPaymentService {
 
-    private final Clock clock;
     private final BusinessLogicClient businessLogicClient;
 
     @Autowired
-    public RegularPaymentServiceImpl(Clock clock, BusinessLogicClient businessLogicClient) {
-        this.clock = clock;
+    public RegularPaymentServiceImpl(BusinessLogicClient businessLogicClient) {
         this.businessLogicClient = businessLogicClient;
     }
 
@@ -33,13 +29,10 @@ public class RegularPaymentServiceImpl implements RegularPaymentService {
 
         for (Instruction instruction : allActiveInstruction) {
             try {
-
-                if (OffsetDateTime.now(clock).isAfter(instruction.getNextExecutionAt())) {
-                    System.out.println("Create trans with id:" + instruction.getId());
+                    log.info("Create trans with id:{}", instruction.getId());
                     businessLogicClient.createTransaction(instruction);
-                }
             } catch (CreationFailureException e) {
-                log.error("Failed to create transaction: " + e.getMessage());
+                log.error("Failed to create transaction: {}", e.getMessage());
             }
         }
 

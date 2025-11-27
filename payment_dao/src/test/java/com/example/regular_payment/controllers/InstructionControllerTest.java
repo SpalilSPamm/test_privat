@@ -181,7 +181,7 @@ public class InstructionControllerTest {
 
         mockMvc.perform(delete("/instructions/{id}", testId))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message", is("Instruction with ID 42 not found in PDS.")));;
+                .andExpect(jsonPath("$.message", is("Instruction with ID 42 not found in PDS.")));
     }
 
     @Test
@@ -251,16 +251,20 @@ public class InstructionControllerTest {
         when(instructionService.getInstructionsByIin(eq("0123456789")))
                 .thenReturn(expectedList);
 
+        when(instructionMapper.toDTO(any(Instruction.class)))
+                .thenReturn(createInstructionDTO(1L))
+                .thenReturn(createInstructionDTO(2L));
+
         mockMvc.perform(get("/instructions/search/iin/{iin}", "0123456789")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].id", is(100)))
-                .andExpect(jsonPath("$[0].payerFirstName", is("Іван0")))
-                .andExpect(jsonPath("$[0].payerIin", is("0123456789")))
-                .andExpect(jsonPath("$[0].amount", is(50.00)))
-                .andExpect(jsonPath("$[1].id", is(101)));
+                .andExpect(jsonPath("$[0].id", is(1)))
+                .andExpect(jsonPath("$[0].payerFirstName", is("NewName")))
+                .andExpect(jsonPath("$[0].payerIin", is("1111111118")))
+                .andExpect(jsonPath("$[0].amount", is(500.50)))
+                .andExpect(jsonPath("$[1].id", is(2)));
     }
 
     @Test

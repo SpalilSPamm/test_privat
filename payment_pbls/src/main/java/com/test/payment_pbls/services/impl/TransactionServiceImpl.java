@@ -34,8 +34,8 @@ public class TransactionServiceImpl implements TransactionService {
 
         log.info("PBLS: Update last and next execution date for instruction ID: {}", instruction.getId());
 
-        instruction.setLastExecutionAt(OffsetDateTime.now());
-        instruction.setNextExecutionAt(OffsetDateTime.now().plus(instruction.getPeriodValue(), instruction.getPeriodUnit()));
+        instruction.setLastExecutionAt(OffsetDateTime.now(clock));
+        instruction.setNextExecutionAt(OffsetDateTime.now(clock).plus(instruction.getPeriodValue(), instruction.getPeriodUnit()));
 
         log.info("PBLS: Initiating transaction creation for instruction ID: {}", instruction.getId());
 
