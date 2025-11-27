@@ -68,4 +68,17 @@ public class TransactionClient {
             throw new CreationFailureException("An unexpected error occurred during instruction search.");
         }
     }
+
+    public List<TransactionDTO> createTransactionsBatch(List<Transaction> transactions) {
+        try {
+            return restClient.post()
+                    .uri(serverUrl + "/transactions/batch") // Новий endpoint
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(transactions)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
+        } catch (RestClientException e) {
+            throw new CreationFailureException("Failed to save batch transactions in PDS.");
+        }
+    }
 }

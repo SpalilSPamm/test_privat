@@ -74,4 +74,16 @@ public class TransactionController {
 
         return ResponseEntity.status(HttpStatus.OK).body(result);
     }
+
+    @PostMapping("/batch")
+    public ResponseEntity<List<TransactionDTO>> createTransactionsBatch(@RequestBody List<TransactionCreateDTO> batchDtos) {
+
+        List<Transaction> transactions = batchDtos.stream().map(transactionMapper::toEntity).toList();
+
+        List<Transaction> savedTransactions = transactionService.createTransactionsBatch(transactions);
+
+        List<TransactionDTO> responseDtos = savedTransactions.stream().map(transactionMapper::toDTO).toList();
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(responseDtos);
+    }
 }

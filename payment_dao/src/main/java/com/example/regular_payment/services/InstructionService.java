@@ -7,6 +7,7 @@ import org.springframework.data.domain.Slice;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
 public interface InstructionService {
 
@@ -15,6 +16,7 @@ public interface InstructionService {
     Instruction updateInstruction(Long id, InstructionDTO instructionDTO);
 
     void updateLastAndNextExecutionTime(Long id, OffsetDateTime lastExecutionAt, OffsetDateTime nextExecutionAt);
+    Map<Long, Instruction> updateExecutionTimesBatch(List<Instruction> instructionsWithUpdates);
 
     void deleteInstruction(Long id);
 

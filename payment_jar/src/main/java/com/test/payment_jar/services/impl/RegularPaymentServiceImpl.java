@@ -25,14 +25,13 @@ public class RegularPaymentServiceImpl implements RegularPaymentService {
     public void processPayments() {
 
         int pageSize = 1000;
-        boolean hasMore = true;
+        int offset = 0;
 
-        while (hasMore) {
+        while (true) {
 
-            List<Instruction> batch = businessLogicClient.getScheduledInstructions(0, pageSize);
+            List<Instruction> batch = businessLogicClient.getScheduledInstructions(offset, pageSize);
 
             if (batch.isEmpty()) {
-                hasMore = false;
                 break;
             }
 
@@ -40,8 +39,10 @@ public class RegularPaymentServiceImpl implements RegularPaymentService {
 
             businessLogicClient.createTransactionsBatch(batch);
 
+            offset += pageSize;
+
             if (batch.size() < pageSize) {
-                hasMore = false;
+                break;
             }
         }
     }

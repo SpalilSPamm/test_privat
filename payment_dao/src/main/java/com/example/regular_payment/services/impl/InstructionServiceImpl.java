@@ -16,7 +16,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class InstructionServiceImpl implements InstructionService {
@@ -65,6 +69,39 @@ public class InstructionServiceImpl implements InstructionService {
         instruction.setNextExecutionAt(nextExecutionAt);
 
         instructionRepository.save(instruction);
+    }
+
+    @Override
+    public Map<Long, Instruction> updateExecutionTimesBatch(List<Instruction> instructionsWithUpdates) {
+
+        if (instructionsWithUpdates.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Set<Long> ids = instructionsWithUpdates.stream()
+                .map(Instruction::getId)
+                .collect(Collectors.toSet());
+
+        Map<Long, Instruction> updatesMap = instructionsWithUpdates.stream()
+                .collect(Collectors.toMap(Instruction::getId, i -> i, (v1, v2) -> v1));
+
+        List<Instruction> dbInstructions = instructionRepository.findAllById(ids);
+
+        if (dbInstructions.size() != ids.size()) {
+            throw new InstructionNotFoundException("One or more instructions not found in batch update");
+        }
+
+        for (Instruction dbInstruction : dbInstructions) {
+            Instruction updateData = updatesMap.get(dbInstruction.getId());
+
+            dbInstruction.setLastExecutionAt(updateData.getLastExecutionAt());
+            dbInstruction.setNextExecutionAt(updateData.getNextExecutionAt());
+        }
+
+        List<Instruction> savedInstructions = instructionRepository.saveAll(dbInstructions);
+
+        return savedInstructions.stream()
+                .collect(Collectors.toMap(Instruction::getId, i -> i));
     }
 
     @Override

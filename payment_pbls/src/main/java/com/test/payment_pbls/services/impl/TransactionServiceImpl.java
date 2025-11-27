@@ -82,19 +82,49 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     public BatchResultDTO processBatch(List<Instruction> instructions) {
-        int success = 0;
+
+        List<Transaction> transactionsToSend = new ArrayList<>();
         List<Long> failedIds = new ArrayList<>();
 
         for (Instruction instruction : instructions) {
             try {
-                createTransaction(instruction);
-                success++;
+                instruction.setLastExecutionAt(OffsetDateTime.now(clock));
+                instruction.setNextExecutionAt(OffsetDateTime.now(clock).plus(
+                        instruction.getPeriodValue(),
+                        instruction.getPeriodUnit())
+                );
+
+                Transaction transaction = new Transaction();
+                transaction.setInstruction(instruction);
+                transaction.setIdempotencyId(instruction.getId() + "_" + instruction.getNextExecutionAt().toString());
+                transaction.setTransactionStatus(TransactionStatus.ACTIVE.getStatusCode());
+                transaction.setTransactionTime(OffsetDateTime.now(clock));
+                transaction.setAmount(instruction.getAmount());
+
+                transactionsToSend.add(transaction);
             } catch (Exception e) {
-                log.error("Failed to process instruction {}", instruction.getId(), e);
+                log.error("Error preparing transaction for instruction {}", instruction.getId(), e);
                 failedIds.add(instruction.getId());
             }
         }
 
-        return new BatchResultDTO(success, failedIds.size(), failedIds);
+        if (!transactionsToSend.isEmpty()) {
+            try {
+                List<TransactionDTO> savedTransactions = transactionClient.createTransactionsBatch(transactionsToSend);
+                log.info("Successfully processed batch of {} transactions", savedTransactions.size());
+            } catch (Exception e) {
+                log.error("Batch save failed", e);
+
+                failedIds.addAll(transactionsToSend.stream()
+                        .map(t -> t.getInstruction().getId())
+                        .toList());
+            }
+        }
+
+        return new BatchResultDTO(
+                transactionsToSend.size() - failedIds.size(),
+                failedIds.size(),
+                failedIds
+        );
     }
 }
