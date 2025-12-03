@@ -69,7 +69,7 @@ public class Instruction {
     @Enumerated(EnumType.STRING)
     private InstructionStatus instructionStatus;
 
-    @OneToMany(mappedBy = "instruction", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "instruction", fetch = FetchType.LAZY)
     private List<Transaction> transactions;
 
 }
