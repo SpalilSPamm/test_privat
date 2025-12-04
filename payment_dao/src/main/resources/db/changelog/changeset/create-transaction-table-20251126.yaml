@@ -62,3 +62,16 @@ databaseChangeLog:
             columns:
               - column:
                   name: instruction_id
+  - changeSet:
+      id: add-version-column-to-instruction
+      author: KirillPivvovarov
+      changes:
+        - addColumn:
+            tableName: payment_instruction
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false

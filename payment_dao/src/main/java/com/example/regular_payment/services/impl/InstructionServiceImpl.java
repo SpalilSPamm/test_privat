@@ -72,6 +72,7 @@ public class InstructionServiceImpl implements InstructionService {
     }
 
     @Override
+    @Transactional
     public Map<Long, Instruction> updateExecutionTimesBatch(List<Instruction> instructionsWithUpdates) {
 
         if (instructionsWithUpdates.isEmpty()) {

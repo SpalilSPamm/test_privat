@@ -1,7 +1,6 @@
 package com.example.regular_payment.models;
 
 import com.example.regular_payment.utils.enums.TransactionStatus;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -19,7 +18,10 @@ public class Transaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
+    @Version
+    private Long version;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "instruction_id")
     private Instruction instruction;
 
@@ -30,5 +32,17 @@ public class Transaction {
     private OffsetDateTime transactionTime;
 
     @Column(name = "transaction_status", length = 1)
-    private String transactionStatus;
+    private TransactionStatus transactionStatus;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Transaction that)) return false;
+        return id != null && getId().equals(that.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
 }

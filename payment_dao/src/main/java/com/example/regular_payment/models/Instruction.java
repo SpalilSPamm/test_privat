@@ -20,6 +20,9 @@ public class Instruction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    private Long version;
+
     @Column(name = "payer_first_name")
     private String payerFirstName;
 
@@ -66,7 +69,19 @@ public class Instruction {
     @Enumerated(EnumType.STRING)
     private InstructionStatus instructionStatus;
 
-    @OneToMany(mappedBy = "instruction", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "instruction", fetch = FetchType.LAZY)
     private List<Transaction> transactions;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Instruction that)) return false;
+        return id != null && getId().equals(that.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
 
 }
