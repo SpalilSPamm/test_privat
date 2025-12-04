@@ -2,9 +2,9 @@ package com.test.payment_pbls.services.impl;
 
 import com.test.payment_pbls.clients.TransactionClient;
 import com.test.payment_pbls.dtos.BatchResultDTO;
-import com.test.payment_pbls.dtos.TransactionDTO;
 import com.test.payment_pbls.dtos.Instruction;
 import com.test.payment_pbls.dtos.Transaction;
+import com.test.payment_pbls.dtos.TransactionDTO;
 import com.test.payment_pbls.services.TransactionService;
 import com.test.payment_pbls.utils.enums.TransactionStatus;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +15,6 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -34,22 +33,7 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     public TransactionDTO createTransaction(Instruction instruction) {
 
-        log.info("PBLS: Update last and next execution date for instruction ID: {}", instruction.getId());
-
-        instruction.setLastExecutionAt(OffsetDateTime.now(clock));
-        instruction.setNextExecutionAt(OffsetDateTime.now(clock).plus(instruction.getPeriodValue(), instruction.getPeriodUnit()));
-
-        log.info("PBLS: Initiating transaction creation for instruction ID: {}", instruction.getId());
-
-        Transaction transaction = new Transaction();
-
-        transaction.setInstruction(instruction);
-
-        transaction.setIdempotencyId(UUID.randomUUID().toString());
-
-        transaction.setTransactionStatus(TransactionStatus.ACTIVE.getStatusCode());
-        transaction.setTransactionTime(OffsetDateTime.now(clock));
-        transaction.setAmount(instruction.getAmount());
+       Transaction transaction = getTransactionFromInstruction(instruction);
 
         TransactionDTO savedTransaction = transactionClient.createTransaction(transaction);
 
@@ -88,18 +72,8 @@ public class TransactionServiceImpl implements TransactionService {
 
         for (Instruction instruction : instructions) {
             try {
-                instruction.setLastExecutionAt(OffsetDateTime.now(clock));
-                instruction.setNextExecutionAt(OffsetDateTime.now(clock).plus(
-                        instruction.getPeriodValue(),
-                        instruction.getPeriodUnit())
-                );
 
-                Transaction transaction = new Transaction();
-                transaction.setInstruction(instruction);
-                transaction.setIdempotencyId(instruction.getId() + "_" + instruction.getNextExecutionAt().toString());
-                transaction.setTransactionStatus(TransactionStatus.ACTIVE.getStatusCode());
-                transaction.setTransactionTime(OffsetDateTime.now(clock));
-                transaction.setAmount(instruction.getAmount());
+                Transaction transaction = getTransactionFromInstruction(instruction);
 
                 transactionsToSend.add(transaction);
             } catch (Exception e) {
@@ -126,5 +100,26 @@ public class TransactionServiceImpl implements TransactionService {
                 failedIds.size(),
                 failedIds
         );
+    }
+
+    private Transaction getTransactionFromInstruction(Instruction instruction) {
+        log.info("PBLS: Update last and next execution date for instruction ID: {}", instruction.getId());
+
+        instruction.setLastExecutionAt(OffsetDateTime.now(clock));
+        instruction.setNextExecutionAt(OffsetDateTime.now(clock).plus(instruction.getPeriodValue(), instruction.getPeriodUnit()));
+
+        log.info("PBLS: Initiating transaction creation for instruction ID: {}", instruction.getId());
+
+        Transaction transaction = new Transaction();
+
+        transaction.setInstruction(instruction);
+
+        transaction.setIdempotencyId(instruction.getId() + "_" + instruction.getNextExecutionAt().toString());
+
+        transaction.setTransactionStatus(TransactionStatus.ACTIVE.getStatusCode());
+        transaction.setTransactionTime(OffsetDateTime.now(clock));
+        transaction.setAmount(instruction.getAmount());
+
+        return transaction;
     }
 }
