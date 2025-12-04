@@ -72,4 +72,16 @@ public class Instruction {
     @OneToMany(mappedBy = "instruction", fetch = FetchType.LAZY)
     private List<Transaction> transactions;
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Instruction that)) return false;
+        return id != null && getId().equals(that.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
 }

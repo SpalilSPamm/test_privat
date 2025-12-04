@@ -1,12 +1,12 @@
 package com.example.regular_payment.models;
 
+import com.example.regular_payment.utils.enums.TransactionStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.Objects;
 
 @Setter
 @Getter
@@ -32,17 +32,17 @@ public class Transaction {
     private OffsetDateTime transactionTime;
 
     @Column(name = "transaction_status", length = 1)
-    private String transactionStatus;
+    private TransactionStatus transactionStatus;
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
-        Transaction that = (Transaction) o;
-        return Objects.equals(id, that.id) && Objects.equals(version, that.version) && Objects.equals(instruction, that.instruction) && Objects.equals(idempotencyId, that.idempotencyId) && Objects.equals(amount, that.amount) && Objects.equals(transactionTime, that.transactionTime) && Objects.equals(transactionStatus, that.transactionStatus);
+        if (this == o) return true;
+        if (!(o instanceof Transaction that)) return false;
+        return id != null && getId().equals(that.getId());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, version, instruction, idempotencyId, amount, transactionTime, transactionStatus);
+        return getClass().hashCode();
     }
 }
